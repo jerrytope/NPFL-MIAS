@@ -1,0 +1,336 @@
+{% extends 'dashboard/base.html' %}
+{% load static %}
+
+{% block title %}NPFL All-Time Head-to-Head Analytics{% endblock %}
+
+{% block content %}
+<!-- Top Header Nav -->
+<header class="app-header">
+    <div class="header-logo-section">
+        <img src="{% static 'logo.png' %}" alt="NPFL Logo" class="header-main-logo">
+        <div class="header-title-wrapper">
+            <h1>NPFL All-Time Analytics</h1>
+            <p class="subtitle">Head-to-Head Stats &amp; Seasonal Trends (2002 - Present)</p>
+        </div>
+    </div>
+    
+    <div class="header-actions">
+        <div class="sync-status" id="syncStatus">
+            <span class="status-dot green"></span>
+            <span class="status-text">Cache Synced</span>
+        </div>
+        <button class="btn btn-secondary btn-icon-text" id="btnRefresh" title="Re-fetch latest data from Google Sheets">
+            <i class="fa-solid fa-arrows-rotate"></i>
+            <span>Sync Sheets</span>
+        </button>
+    </div>
+</header>
+
+<main class="dashboard-grid">
+    <!-- Comparison Controls Card -->
+    <section class="card controls-card">
+        <div class="controls-layout">
+            <div class="team-selector-box">
+                <label for="selectTeam1"><i class="fa-solid fa-shield-halved team-1-color"></i> Team 1</label>
+                <select id="selectTeam1" class="form-select">
+                    <option value="" disabled selected>Select Team 1</option>
+                    {% for team in teams %}
+                    <option value="{{ team }}">{{ team }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="vs-divider">
+                <span class="vs-text">VS</span>
+            </div>
+            
+            <div class="team-selector-box">
+                <label for="selectTeam2"><i class="fa-solid fa-shield-halved team-2-color"></i> Team 2</label>
+                <select id="selectTeam2" class="form-select">
+                    <option value="" disabled selected>Select Team 2</option>
+                    {% for team in teams %}
+                    <option value="{{ team }}">{{ team }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        
+        <div class="alert-box" id="errorAlert" style="display: none;">
+            <i class="fa-solid fa-triangle-exclamation"></i>
+            <span id="errorMessage">Please select two different teams.</span>
+        </div>
+    </section>
+
+    <!-- Placeholder Section (Visible before comparison is run) -->
+    <section class="card placeholder-card" id="comparisonPlaceholder">
+        <div class="placeholder-content">
+            <i class="fa-solid fa-chart-line placeholder-icon"></i>
+            <h2>Compare NPFL Teams</h2>
+            <p>Select two teams from the dropdowns above to analyze Head-to-Head history, goals distributions, seasonal performance, and recent matches.</p>
+        </div>
+    </section>
+
+    <!-- Comparison Results View (Hidden by default) -->
+    <div class="comparison-results-wrapper" id="comparisonResults" style="display: none;">
+        
+        <!-- KPI Row -->
+        <div class="kpi-row">
+            <div class="card kpi-card glassmorphic">
+                <div class="kpi-icon-box yellow">
+                    <i class="fa-solid fa-circle-nodes"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-value" id="kpiTotalMatches">0</span>
+                    <span class="kpi-label">Matches Played</span>
+                </div>
+            </div>
+            
+            <div class="card kpi-card glassmorphic">
+                <div class="kpi-icon-box team-1-bg">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-value" id="kpiTeam1Wins">0</span>
+                    <span class="kpi-label" id="kpiTeam1WinsLabel">Team 1 Wins</span>
+                </div>
+            </div>
+            
+            <div class="card kpi-card glassmorphic">
+                <div class="kpi-icon-box team-2-bg">
+                    <i class="fa-solid fa-trophy"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-value" id="kpiTeam2Wins">0</span>
+                    <span class="kpi-label" id="kpiTeam2WinsLabel">Team 2 Wins</span>
+                </div>
+            </div>
+            
+            <div class="card kpi-card glassmorphic">
+                <div class="kpi-icon-box gray">
+                    <i class="fa-solid fa-handshake"></i>
+                </div>
+                <div class="kpi-content">
+                    <span class="kpi-value" id="kpiDraws">0</span>
+                    <span class="kpi-label">Draws</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Team Profile & Form Summary -->
+        <div class="profiles-container">
+            <!-- Team 1 Card -->
+            <div class="card profile-card team-1-border">
+                <div class="profile-header">
+                    <div class="team-avatar-wrapper" id="t1Avatar">
+                        <!-- Filled by JS -->
+                    </div>
+                    <div class="profile-title">
+                        <h3 id="t1Name">Team 1</h3>
+                        <div class="form-container">
+                            <span class="form-title">Recent Form:</span>
+                            <div class="form-badges" id="t1FormBadges">
+                                <!-- Filled by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="recent-table-wrapper">
+                    <h4>Recent NPFL Matches</h4>
+                    <table class="table-compact">
+                        <thead>
+                            <tr>
+                                <th>Opponent</th>
+                                <th>Venue</th>
+                                <th>Score</th>
+                                <th>Res</th>
+                            </tr>
+                        </thead>
+                        <tbody id="t1RecentMatchesBody">
+                            <!-- Filled by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Team 2 Card -->
+            <div class="card profile-card team-2-border">
+                <div class="profile-header">
+                    <div class="team-avatar-wrapper" id="t2Avatar">
+                        <!-- Filled by JS -->
+                    </div>
+                    <div class="profile-title">
+                        <h3 id="t2Name">Team 2</h3>
+                        <div class="form-container">
+                            <span class="form-title">Recent Form:</span>
+                            <div class="form-badges" id="t2FormBadges">
+                                <!-- Filled by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="recent-table-wrapper">
+                    <h4>Recent NPFL Matches</h4>
+                    <table class="table-compact">
+                        <thead>
+                            <tr>
+                                <th>Opponent</th>
+                                <th>Venue</th>
+                                <th>Score</th>
+                                <th>Res</th>
+                            </tr>
+                        </thead>
+                        <tbody id="t2RecentMatchesBody">
+                            <!-- Filled by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Goals & Averages Panel -->
+        <div class="goals-analysis-section">
+            <div class="card goals-averages-card">
+                <h3>Average Goals Analysis</h3>
+                <div class="avg-goals-grid">
+                    <div class="avg-goals-item">
+                        <span class="avg-label" id="avgScoredLabel1">Goals Scored</span>
+                        <div class="avg-progress-bar-container">
+                            <div class="avg-progress-value-text" id="avgScoredVal1">0.00</div>
+                            <div class="avg-progress-fill team-1-bg" id="avgScoredFill1" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="avg-goals-item">
+                        <span class="avg-label" id="avgScoredLabel2">Goals Scored</span>
+                        <div class="avg-progress-bar-container">
+                            <div class="avg-progress-value-text" id="avgScoredVal2">0.00</div>
+                            <div class="avg-progress-fill team-2-bg" id="avgScoredFill2" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="avg-goals-item">
+                        <span class="avg-label" id="avgConcededLabel1">Goals Conceded</span>
+                        <div class="avg-progress-bar-container">
+                            <div class="avg-progress-value-text" id="avgConcededVal1">0.00</div>
+                            <div class="avg-progress-fill team-1-conceded-bg" id="avgConcededFill1" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="avg-goals-item">
+                        <span class="avg-label" id="avgConcededLabel2">Goals Conceded</span>
+                        <div class="avg-progress-bar-container">
+                            <div class="avg-progress-value-text" id="avgConcededVal2">0.00</div>
+                            <div class="avg-progress-fill team-2-conceded-bg" id="avgConcededFill2" style="width: 0%"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization Charts Grid -->
+        <div class="charts-grid">
+            <div class="card chart-card">
+                <div class="watermark-overlay"></div>
+                <h3>H2H Distribution</h3>
+                <div class="chart-canvas-wrapper small-chart">
+                    <canvas id="h2hPieChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="card chart-card">
+                <div class="watermark-overlay"></div>
+                <h3>Goals Scored H2H</h3>
+                <div class="chart-canvas-wrapper small-chart">
+                    <canvas id="goalsBarChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="card chart-card full-width">
+                <div class="watermark-overlay"></div>
+                <h3>H2H Goals Distribution (Last 10 Seasons)</h3>
+                <div class="chart-canvas-wrapper long-chart">
+                    <canvas id="seasonsGroupedBarChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tables & Raw Data Section -->
+        <div class="tabs-section">
+            <div class="tabs-header">
+                <button class="tab-btn active" data-tab="tabSeasonGoals">Season Goals</button>
+                <button class="tab-btn" data-tab="tabSeasonPerTeam">Season Goals Per Team</button>
+                <button class="tab-btn" data-tab="tabRawMatches">H2H Match History</button>
+            </div>
+            
+            <div class="tabs-content">
+                <!-- Tab: Season Goals -->
+                <div class="tab-pane active" id="tabSeasonGoals">
+                    <div class="table-wrapper">
+                        <table class="table-standard">
+                            <thead>
+                                <tr>
+                                    <th>Season</th>
+                                    <th>Total Goals Scored H2H</th>
+                                </tr>
+                            </thead>
+                            <tbody id="seasonGoalsTableBody">
+                                <!-- Filled by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Tab: Season Goals Per Team -->
+                <div class="tab-pane" id="tabSeasonPerTeam">
+                    <div class="table-wrapper">
+                        <table class="table-standard">
+                            <thead>
+                                <tr>
+                                    <th>Season</th>
+                                    <th id="thTeam1Goals">Team 1 Goals</th>
+                                    <th id="thTeam2Goals">Team 2 Goals</th>
+                                </tr>
+                            </thead>
+                            <tbody id="seasonPerTeamTableBody">
+                                <!-- Filled by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Tab: Raw Match History -->
+                <div class="tab-pane" id="tabRawMatches">
+                    <div class="table-filter-bar">
+                        <div class="search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="rawMatchSearch" placeholder="Search matches by season or team name...">
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="table-standard" id="rawMatchesTable">
+                            <thead>
+                                <tr>
+                                    <th>Season</th>
+                                    <th>Match Details</th>
+                                    <th>Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rawMatchesTableBody">
+                                <!-- Filled by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Global path mapping for logos directory
+    const logoBaseUrl = "{% static '' %}";
+</script>
+<script src="{% static 'dashboard/script.js' %}"></script>
+{% endblock %}
