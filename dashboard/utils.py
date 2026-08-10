@@ -1,11 +1,54 @@
+import os
+import traceback
+from pathlib import Path
 import pandas as pd
 import numpy as np
-import requests
+from anthropic import Anthropic
 from django.core.cache import cache
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+DOTENV_PATH = PROJECT_ROOT / '.env'
+
+
+def load_dotenv(dotenv_path=None):
+    path = Path(dotenv_path or DOTENV_PATH)
+    if not path.exists():
+        return
+
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'):
+            continue
+        if '=' not in line:
+            continue
+        key, value = line.split('=', 1)
+        key = key.strip()
+        value = value.strip().strip('"').strip("'")
+        if key and key not in os.environ:
+            os.environ[key] = value
+
+
+load_dotenv()
 
 DOCUMENT_ID = '1rlP9mSfvJE73xK6Q5ddtDnk67U6D1DjVsJH-1dIXOXk'
 SHEET_NAME = 'All-Time-Results'
 URL = f'https://docs.google.com/spreadsheets/d/{DOCUMENT_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}'
+ANTHROPIC_BASE_URL = os.getenv('ANTHROPIC_BASE_URL', 'https://agentrouter.org')
+ANTHROPIC_FALLBACK_BASE_URL = os.getenv('ANTHROPIC_FALLBACK_BASE_URL', 'https://ps.air-outer.com')
+ANTHROPIC_BASE_URLS = [
+    ANTHROPIC_BASE_URL,
+    ANTHROPIC_FALLBACK_BASE_URL,
+]
+ANTHROPIC_MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-opus-4-8')
+
+
+def get_agentrouter_api_key():
+    api_key = os.getenv('ANTHROPIC_API_KEY', '').strip() or os.getenv('AGENTROUTER_API_KEY', '').strip()
+    if not api_key:
+        raise ValueError(
+            'Anthropic/AgentRouter API key is not configured. Set ANTHROPIC_API_KEY or AGENTROUTER_API_KEY in your environment or .env before generating reports.'
+        )
+    return api_key
 
 def get_npfl_data(force_refresh=False):
     """
@@ -242,3 +285,107 @@ def perform_comparison(team1, team2):
         'team2_recent_games': t2_recent_games,
         'raw_matches': raw_matches
     }
+
+
+def _format_recent_games(games):
+    if not games:
+        return 'No recent completed games available.'
+
+    lines = []
+    for game in games[:5]:
+        lines.append(
+            f"{game['season']}: {game['home']} {game['home_goal']}-{game['away_goal']} {game['away']} ({game['result']})"
+        )
+    return '\n'.join(lines)
+
+
+def generate_expert_report(team1, team2, comparison_data):
+    api_key = get_agentrouter_api_key()
+
+    recent_team1 = _format_recent_games(comparison_data.get('team1_recent_games', []))
+    recent_team2 = _format_recent_games(comparison_data.get('team2_recent_games', []))
+    season_summaries = comparison_data.get('season_goals', [])[:5]
+    season_summary_text = ', '.join(
+        [f"{item['season']} ({item['total_goals']} goals)" for item in season_summaries]
+    ) or 'No season goal summary available.'
+
+    prompt = f"""
+You are a veteran BBC football analyst with 20 years of NPFL coverage, writing for a Nigerian audience. You know the history, culture, and tactical flavor of the league.
+
+Write a polished expert report for a head-to-head analysis between {team1} and {team2}. Use the facts below and frame the narrative around rivalry, recent form, scoring patterns, and the tactical outlook for both teams.
+
+Facts:
+- Total H2H matches: {comparison_data['total_matches']}
+- {team1} wins: {comparison_data['team1_wins']}
+- {team2} wins: {comparison_data['team2_wins']}
+- Draws: {comparison_data['draws']}
+- Goals scored by {team1}: {comparison_data['team1_goals']}
+- Goals scored by {team2}: {comparison_data['team2_goals']}
+- {team1} average goals scored: {comparison_data['avg_scored_t1']:.2f}
+- {team1} average goals conceded: {comparison_data['avg_conceded_t1']:.2f}
+- {team2} average goals scored: {comparison_data['avg_scored_t2']:.2f}
+- {team2} average goals conceded: {comparison_data['avg_conceded_t2']:.2f}
+- {team1} recent form: {comparison_data['team1_form']}
+- {team2} recent form: {comparison_data['team2_form']}
+- Top seasons by H2H goals: {season_summary_text}
+
+Recent form details for {team1}:
+{recent_team1}
+
+Recent form details for {team2}:
+{recent_team2}
+
+Write the report in engaging BBC analyst prose. Avoid generic filler; make it feel specific to the NPFL and these two teams.
+"""
+
+    last_exception = None
+    for base_url in ANTHROPIC_BASE_URLS:
+        try:
+            client = Anthropic(api_key=api_key, base_url=base_url)
+            response = client.messages.create(
+                model=ANTHROPIC_MODEL,
+                max_tokens=700,
+                temperature=0.8,
+                system='You are a BBC football analyst with extensive NPFL expertise.',
+                messages=[
+                    {
+                        'role': 'user',
+                        'content': prompt
+                    }
+                ],
+            )
+
+            report_text = ''
+            if hasattr(response, 'content'):
+                content = response.content
+                if isinstance(content, list):
+                    for block in content:
+                        if hasattr(block, 'text') and block.text:
+                            report_text = block.text
+                            break
+                        if isinstance(block, dict) and block.get('text'):
+                            report_text = block['text']
+                            break
+
+            if not report_text and isinstance(response, dict):
+                report_text = response.get('content', '')
+                if isinstance(report_text, list):
+                    for block in report_text:
+                        if isinstance(block, dict) and block.get('text'):
+                            report_text = block['text']
+                            break
+                    else:
+                        report_text = ''
+
+            report_text = report_text.strip() if isinstance(report_text, str) else ''
+
+            if not report_text:
+                raise ValueError('Anthropic returned an empty report.')
+
+            return report_text
+        except Exception as exc:
+            last_exception = exc
+            continue
+
+    error_details = ''.join(traceback.format_exception_only(type(last_exception), last_exception)).strip()
+    raise ValueError(f'Could not generate report via Anthropic/AgentRouter. Last error: {error_details}')

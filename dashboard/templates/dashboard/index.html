@@ -19,6 +19,10 @@
             <span class="status-dot green"></span>
             <span class="status-text">Cache Synced</span>
         </div>
+        <button class="btn btn-primary btn-icon-text" id="btnGenerateReport" title="Generate BBC analyst report" disabled>
+            <i class="fa-solid fa-file-lines"></i>
+            <span>Generate BBC Report</span>
+        </button>
         <button class="btn btn-secondary btn-icon-text" id="btnRefresh" title="Re-fetch latest data from Google Sheets">
             <i class="fa-solid fa-arrows-rotate"></i>
             <span>Sync Sheets</span>
@@ -224,6 +228,16 @@
                         </div>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <div class="card report-card" id="reportCard" style="display: none;">
+            <div class="report-header">
+                <h3>BBC Analyst Report</h3>
+                <span class="report-status" id="reportStatus">Select two teams and click Generate BBC Report.</span>
+            </div>
+            <div class="report-body" id="reportContent">
+                <p class="report-placeholder">The expert analysis will appear here once the report is generated.</p>
             </div>
         </div>
 

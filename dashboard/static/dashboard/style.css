@@ -154,6 +154,21 @@ body {
     border: 1px solid var(--border-color);
 }
 
+..btn-primary {
+    background-color: var(--primary);
+    color: #0b1120;
+    border-color: transparent;
+}
+
+.btn-primary:hover {
+    background-color: #22d3ee;
+}
+
+.btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
 .btn-secondary:hover {
     background-color: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.2);
@@ -590,6 +605,90 @@ body {
 
 .team-2-conceded-bg {
     background: linear-gradient(to right, rgba(0, 120, 212, 0.4), rgba(0, 120, 212, 0.7));
+}
+
+/* Report card styles */
+.report-card {
+    padding: 1.5rem;
+    border-radius: 14px;
+    background-color: rgba(17, 24, 39, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 1.5rem;
+}
+
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.report-header h3 {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.report-status {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.report-body {
+    min-height: 140px;
+    color: var(--text-primary);
+    line-height: 1.75;
+}
+
+.report-placeholder {
+    color: var(--text-secondary);
+}
+
+.report-text p {
+    margin-bottom: 1rem;
+}
+
+/* Report card styles */
+.report-card {
+    padding: 1.5rem;
+    border-radius: 14px;
+    background-color: rgba(17, 24, 39, 0.75);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 1.5rem;
+}
+
+.report-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1rem;
+}
+
+.report-header h3 {
+    font-family: var(--font-display);
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+.report-status {
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+}
+
+.report-body {
+    min-height: 120px;
+    color: var(--text-primary);
+    line-height: 1.75;
+}
+
+.report-placeholder {
+    color: var(--text-secondary);
+}
+
+.report-text p {
+    margin-bottom: 1rem;
 }
 
 /* Visualization charts grid */

@@ -1,3 +1,4 @@
+import traceback
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
@@ -29,6 +30,35 @@ def compare_teams(request):
         return JsonResponse(data)
     except Exception as e:
         return JsonResponse({'error': f'Failed to calculate analytics: {str(e)}'}, status=500)
+
+@require_GET
+def generate_report(request):
+    """
+    JSON API endpoint to generate a BBC-style expert report for the selected teams.
+    """
+    team1 = request.GET.get('team1')
+    team2 = request.GET.get('team2')
+
+    if not team1 or not team2:
+        return JsonResponse({'error': 'Two teams must be selected for report generation.'}, status=400)
+
+    if team1 == team2:
+        return JsonResponse({'error': 'Please select two different teams.'}, status=400)
+
+    try:
+        comparison = utils.perform_comparison(team1, team2)
+        report_text = utils.generate_expert_report(team1, team2, comparison)
+        return JsonResponse({'report': report_text})
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        return JsonResponse(
+            {
+                'error': f'Failed to generate report: {str(e)}',
+                'debug': error_trace,
+            },
+            status=500,
+        )
+
 
 @require_GET
 def refresh_data(request):

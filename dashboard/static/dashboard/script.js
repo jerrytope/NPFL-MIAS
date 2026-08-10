@@ -10,6 +10,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const errorMessage = document.getElementById('errorMessage');
     const placeholderCard = document.getElementById('comparisonPlaceholder');
     const resultsWrapper = document.getElementById('comparisonResults');
+    const btnGenerateReport = document.getElementById('btnGenerateReport');
+    const reportCard = document.getElementById('reportCard');
+    const reportStatus = document.getElementById('reportStatus');
+    const reportContent = document.getElementById('reportContent');
     const btnRefresh = document.getElementById('btnRefresh');
     const syncStatus = document.getElementById('syncStatus');
     const rawMatchSearch = document.getElementById('rawMatchSearch');
@@ -108,19 +112,80 @@ document.addEventListener('DOMContentLoaded', () => {
             showError("Please select two different teams for comparison.");
             placeholderCard.style.display = 'block';
             resultsWrapper.style.display = 'none';
+            updateReportButtonState();
             return;
         }
 
+        updateReportButtonState();
         // Trigger the AJAX fetch to Django view
         fetchComparison(team1, team2);
     }
 
     selectTeam1.addEventListener('change', onSelectionChange);
     selectTeam2.addEventListener('change', onSelectionChange);
+    btnGenerateReport.addEventListener('click', onGenerateReportClick);
+    updateReportButtonState();
 
     function showError(msg) {
         errorMessage.innerText = msg;
         errorAlert.style.display = 'flex';
+    }
+
+    function updateReportButtonState() {
+        if (!btnGenerateReport) return;
+        const team1 = selectTeam1.value;
+        const team2 = selectTeam2.value;
+        const valid = team1 && team2 && team1 !== team2;
+        btnGenerateReport.disabled = !valid;
+        if (!valid) {
+            reportCard.style.display = 'none';
+            reportStatus.innerText = 'Select two different teams to enable report generation.';
+        }
+    }
+
+    function onGenerateReportClick() {
+        const team1 = selectTeam1.value;
+        const team2 = selectTeam2.value;
+
+        if (!team1 || !team2 || team1 === team2) {
+            showError('Please select two different teams to generate a report.');
+            return;
+        }
+
+        reportCard.style.display = 'block';
+        reportStatus.innerText = 'Generating BBC expert report...';
+        reportContent.innerHTML = '<p class="report-placeholder">Working on your analysis. This may take a few seconds.</p>';
+        btnGenerateReport.disabled = true;
+
+        fetch(`/generate-report/?team1=${encodeURIComponent(team1)}&team2=${encodeURIComponent(team2)}`)
+            .then(res => {
+                if (!res.ok) {
+                    return res.text().then(text => {
+                        try {
+                            const err = JSON.parse(text);
+                            throw new Error(err.error || err.debug || 'Server error generating report');
+                        } catch (parseErr) {
+                            throw new Error(text || 'Server error generating report');
+                        }
+                    });
+                }
+                return res.json();
+            })
+            .then(data => {
+                reportStatus.innerText = `Expert BBC report for ${team1} vs ${team2}`;
+                const paragraphs = data.report
+                    .split(/\n\n+/)
+                    .map(p => `<p>${p.trim()}</p>`)
+                    .join('');
+                reportContent.innerHTML = `<div class="report-text">${paragraphs}</div>`;
+            })
+            .catch(err => {
+                reportStatus.innerText = 'Report generation failed.';
+                reportContent.innerHTML = `<p class="report-placeholder">${err.message}</p>`;
+            })
+            .finally(() => {
+                updateReportButtonState();
+            });
     }
 
     // Fetch comparison stats from server
