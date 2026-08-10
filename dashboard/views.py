@@ -4,12 +4,36 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from dashboard import utils
 
+
+# The clubs eligible for selection in the current 2026/27 NPFL season.
+NPFL_CLUBS_2026_2027 = [
+    "Abia Warriors",
+    "Barau",
+    "Bendel Insurance",
+    "Doma United",
+    "Enugu Rangers",
+    "Enyimba",
+    "Ikorodu City",
+    "Inter Lagos",
+    "Kano Pillars",
+    "Katsina United",
+    "Kun Khalifat",
+    "Kwara United",
+    "Nasarawa United",
+    "Niger Tornadoes",
+    "Plateau United",
+    "Ranchers Bees",
+    "Rivers United",
+    "Shooting Stars",
+    "Sporting Lagos",
+    "Warri Wolves",
+]
+
 def index(request):
     """
     Render main dashboard landing page.
     """
-    teams = utils.get_unique_teams()
-    return render(request, 'dashboard/index.html', {'teams': teams})
+    return render(request, 'dashboard/index.html', {'teams': NPFL_CLUBS_2026_2027})
 
 @require_GET
 def compare_teams(request):
@@ -63,13 +87,13 @@ def generate_report(request):
 @require_GET
 def refresh_data(request):
     """
-    JSON API endpoint to purge the cached Google Sheets data and fetch fresh records.
+    JSON API endpoint to refresh the cached DB-derived NPFL data.
     """
     try:
         utils.get_npfl_data(force_refresh=True)
         return JsonResponse({
             'status': 'success',
-            'message': 'Google Sheets data synchronized and cache updated successfully!'
+            'message': 'Database-derived NPFL cache refreshed successfully!'
         })
     except Exception as e:
         return JsonResponse({'error': f'Failed to refresh data: {str(e)}'}, status=500)

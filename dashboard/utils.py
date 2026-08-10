@@ -29,10 +29,6 @@ def load_dotenv(dotenv_path=None):
 
 
 load_dotenv()
-
-DOCUMENT_ID = '1rlP9mSfvJE73xK6Q5ddtDnk67U6D1DjVsJH-1dIXOXk'
-SHEET_NAME = 'All-Time-Results'
-URL = f'https://docs.google.com/spreadsheets/d/{DOCUMENT_ID}/gviz/tq?tqx=out:csv&sheet={SHEET_NAME}'
 ANTHROPIC_BASE_URL = os.getenv('ANTHROPIC_BASE_URL', 'https://agentrouter.org')
 ANTHROPIC_FALLBACK_BASE_URL = os.getenv('ANTHROPIC_FALLBACK_BASE_URL', 'https://ps.air-outer.com')
 ANTHROPIC_BASE_URLS = [
@@ -52,39 +48,45 @@ def get_agentrouter_api_key():
 
 def get_npfl_data(force_refresh=False):
     """
-    Fetch data from Google Sheets and cache it in memory.
-    If force_refresh is True, bypass the cache and fetch a new version.
+    Load NPFL data from the local Django database and cache it in memory.
+    If force_refresh is True, bypass the cache and rebuild it from the DB.
     """
-    data = None if force_refresh else cache.get('npfl_all_time_data')
+    data = None if force_refresh else cache.get('npfl_all_time_data_db')
+
+    # Prefer DB-backed data when available
     if data is None:
         try:
-            # Fetch CSV from google sheets
-            df = pd.read_csv(URL)
-            # Rename first column if it's the index (season)
-            if df.columns[0] == 'season' or df.columns[0] == 'Unnamed: 0':
-                df.rename(columns={df.columns[0]: 'season'}, inplace=True)
-            else:
-                # If the first column doesn't have a name, set it to season
-                df.index.name = 'season'
-                df = df.reset_index()
-            
-            # Clean data types
-            df['home_goal'] = pd.to_numeric(df['home_goal'], errors='coerce')
-            df['away_goal'] = pd.to_numeric(df['away_goal'], errors='coerce')
-            
-            # Remove entirely empty columns
-            df = df.loc[:, ~df.columns.str.startswith('Unnamed:')]
-            
-            # Cache it
-            cache.set('npfl_all_time_data', df, 86400) # cache for 24 hours
-            data = df
-        except Exception as e:
-            # Fallback in case of errors
-            if not force_refresh:
-                # Try to retrieve from cache even if expired
-                data = cache.get('npfl_all_time_data')
-            if data is None:
-                raise e
+            from dashboard.models import Match
+
+            if Match.objects.exists():
+                qs = Match.objects.select_related('home', 'away').all()
+                rows = []
+                for m in qs:
+                    rows.append({
+                        'season': m.season,
+                        'match_name': m.match_name,
+                        'home': m.home.name if m.home else None,
+                        'away': m.away.name if m.away else None,
+                        'home_goal': m.home_goal,
+                        'away_goal': m.away_goal,
+                        'date': m.date,
+                        'stadium': m.stadium,
+                    })
+                df = pd.DataFrame(rows)
+                # Ensure numeric types
+                if 'home_goal' in df.columns:
+                    df['home_goal'] = pd.to_numeric(df['home_goal'], errors='coerce')
+                if 'away_goal' in df.columns:
+                    df['away_goal'] = pd.to_numeric(df['away_goal'], errors='coerce')
+
+                cache.set('npfl_all_time_data_db', df, 86400)
+                data = df
+        except Exception:
+            data = None
+
+    # If DB fetch failed or there are no Match rows, surface an error
+    if data is None:
+        raise ValueError('No match data available in the database. Run the importer to populate Match records.')
     return data
 
 def get_unique_teams():

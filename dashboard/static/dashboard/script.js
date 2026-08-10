@@ -550,9 +550,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    /* ==========================================================================
-       Google Sheets Cache Refresh
-       ========================================================================== */
+     /* ==========================================================================
+         Database Cache Refresh
+         ========================================================================== */
 
     btnRefresh.addEventListener('click', () => {
         // Change state to syncing
@@ -574,7 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 txt.innerText = 'Cache Synced';
                 
                 // Alert success
-                alert(data.message || 'Data successfully sync from Google Sheets.');
+                alert(data.message || 'Data successfully synced from the local database.');
                 
                 // If teams are currently selected, force recalculation
                 if (selectTeam1.value && selectTeam2.value && selectTeam1.value !== selectTeam2.value) {
