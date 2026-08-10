@@ -131,6 +131,44 @@ document.addEventListener('DOMContentLoaded', () => {
         errorAlert.style.display = 'flex';
     }
 
+    // The report is generated as Markdown. Escape it first, then render the
+    // small, predictable Markdown subset used by the report prompt.
+    function formatReportMarkdown(markdown) {
+        const escapeHtml = (value) => value
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+
+        const formatInline = (value) => escapeHtml(value)
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/__(.+?)__/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/_(.+?)_/g, '<em>$1</em>');
+
+        return markdown.trim().split(/\n\s*\n/).map(block => {
+            const lines = block.trim().split('\n').map(line => line.trim()).filter(Boolean);
+            if (!lines.length) return '';
+
+            const heading = lines.length === 1 && lines[0].match(/^(#{1,3})\s+(.+)$/);
+            if (heading) {
+                const level = heading[1].length + 2;
+                return `<h${level}>${formatInline(heading[2])}</h${level}>`;
+            }
+
+            if (lines.every(line => /^[-*]\s+/.test(line))) {
+                return `<ul>${lines.map(line => `<li>${formatInline(line.replace(/^[-*]\s+/, ''))}</li>`).join('')}</ul>`;
+            }
+
+            if (lines.every(line => /^\d+[.)]\s+/.test(line))) {
+                return `<ol>${lines.map(line => `<li>${formatInline(line.replace(/^\d+[.)]\s+/, ''))}</li>`).join('')}</ol>`;
+            }
+
+            return `<p>${lines.map(formatInline).join('<br>')}</p>`;
+        }).join('');
+    }
+
     function updateReportButtonState() {
         if (!btnGenerateReport) return;
         const team1 = selectTeam1.value;
@@ -173,11 +211,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(data => {
                 reportStatus.innerText = `Expert BBC report for ${team1} vs ${team2}`;
-                const paragraphs = data.report
-                    .split(/\n\n+/)
-                    .map(p => `<p>${p.trim()}</p>`)
-                    .join('');
-                reportContent.innerHTML = `<div class="report-text">${paragraphs}</div>`;
+                reportContent.innerHTML = `<div class="report-text">${formatReportMarkdown(data.report)}</div>`;
             })
             .catch(err => {
                 reportStatus.innerText = 'Report generation failed.';

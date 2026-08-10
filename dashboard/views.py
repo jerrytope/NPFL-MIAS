@@ -11,7 +11,7 @@ NPFL_CLUBS_2026_2027 = [
     "Barau",
     "Bendel Insurance",
     "Doma United",
-    "Enugu Rangers",
+    "Rangers International",
     "Enyimba",
     "Ikorodu City",
     "Inter Lagos",
