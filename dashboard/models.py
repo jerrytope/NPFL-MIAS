@@ -31,3 +31,20 @@ class Match(models.Model):
 
 	def __str__(self):
 		return self.match_name or f"{self.home} vs {self.away} ({self.season})"
+
+
+class TeamComparisonReport(models.Model):
+	"""A generated report stored under a canonical (order-independent) team pair."""
+	team_one = models.CharField(max_length=200)
+	team_two = models.CharField(max_length=200)
+	report = models.TextField()
+	created_at = models.DateTimeField(auto_now_add=True)
+	updated_at = models.DateTimeField(auto_now=True)
+
+	class Meta:
+		constraints = [
+			models.UniqueConstraint(fields=['team_one', 'team_two'], name='unique_team_comparison_report'),
+		]
+
+	def __str__(self):
+		return f"{self.team_one} vs {self.team_two}"

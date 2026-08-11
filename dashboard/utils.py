@@ -36,6 +36,7 @@ ANTHROPIC_BASE_URLS = [
     ANTHROPIC_FALLBACK_BASE_URL,
 ]
 ANTHROPIC_MODEL = os.getenv('ANTHROPIC_MODEL', 'claude-opus-4-8')
+ANTHROPIC_MAX_TOKENS = int(os.getenv('ANTHROPIC_MAX_TOKENS', '3000'))
 
 
 def get_agentrouter_api_key():
@@ -346,7 +347,10 @@ Write the report in engaging BBC analyst prose. Avoid generic filler; make it fe
             client = Anthropic(api_key=api_key, base_url=base_url)
             response = client.messages.create(
                 model=ANTHROPIC_MODEL,
-                max_tokens=700,
+                # Claude Opus 5 may spend part of its output budget on reasoning.
+                # 700 tokens can be exhausted by a ThinkingBlock before any report
+                # text is emitted, so leave room for both thinking and the report.
+                max_tokens=ANTHROPIC_MAX_TOKENS,
                 temperature=0.8,
                 system='You are a BBC football analyst with extensive NPFL expertise.',
                 messages=[
@@ -360,7 +364,9 @@ Write the report in engaging BBC analyst prose. Avoid generic filler; make it fe
             report_text = ''
             if hasattr(response, 'content'):
                 content = response.content
-                if isinstance(content, list):
+                if isinstance(content, str):
+                    report_text = content
+                elif isinstance(content, list):
                     for block in content:
                         if hasattr(block, 'text') and block.text:
                             report_text = block.text
@@ -368,6 +374,8 @@ Write the report in engaging BBC analyst prose. Avoid generic filler; make it fe
                         if isinstance(block, dict) and block.get('text'):
                             report_text = block['text']
                             break
+                elif isinstance(content, dict):
+                    report_text = content.get('text', '') or content.get('content', '')
 
             if not report_text and isinstance(response, dict):
                 report_text = response.get('content', '')

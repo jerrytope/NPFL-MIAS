@@ -3,6 +3,7 @@ from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from dashboard import utils
+from dashboard.models import TeamComparisonReport
 
 
 # The clubs eligible for selection in the current 2026/27 NPFL season.
@@ -29,6 +30,11 @@ NPFL_CLUBS_2026_2027 = [
     "Warri Wolves",
 ]
 
+
+def canonical_team_pair(team1, team2):
+    """Return names in a stable order so A-v-B and B-v-A share a report."""
+    return tuple(sorted((team1, team2), key=str.casefold))
+
 def index(request):
     """
     Render main dashboard landing page.
@@ -51,6 +57,11 @@ def compare_teams(request):
     
     try:
         data = utils.perform_comparison(team1, team2)
+        canonical_team_one, canonical_team_two = canonical_team_pair(team1, team2)
+        data['saved_report'] = TeamComparisonReport.objects.filter(
+            team_one=canonical_team_one,
+            team_two=canonical_team_two,
+        ).values_list('report', flat=True).first()
         return JsonResponse(data)
     except Exception as e:
         return JsonResponse({'error': f'Failed to calculate analytics: {str(e)}'}, status=500)
@@ -70,9 +81,22 @@ def generate_report(request):
         return JsonResponse({'error': 'Please select two different teams.'}, status=400)
 
     try:
+        canonical_team_one, canonical_team_two = canonical_team_pair(team1, team2)
+        saved_report = TeamComparisonReport.objects.filter(
+            team_one=canonical_team_one,
+            team_two=canonical_team_two,
+        ).first()
+        if saved_report:
+            return JsonResponse({'report': saved_report.report, 'cached': True})
+
         comparison = utils.perform_comparison(team1, team2)
         report_text = utils.generate_expert_report(team1, team2, comparison)
-        return JsonResponse({'report': report_text})
+        TeamComparisonReport.objects.create(
+            team_one=canonical_team_one,
+            team_two=canonical_team_two,
+            report=report_text,
+        )
+        return JsonResponse({'report': report_text, 'cached': False})
     except Exception as e:
         error_trace = traceback.format_exc()
         return JsonResponse(

@@ -181,6 +181,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function displaySavedReport(report, team1, team2) {
+        if (!report) {
+            reportCard.style.display = 'none';
+            reportStatus.innerText = 'No saved report yet. Click Generate BBC Report to create one.';
+            return;
+        }
+
+        reportCard.style.display = 'block';
+        reportStatus.innerText = `Saved BBC report for ${team1} vs ${team2}`;
+        reportContent.innerHTML = `<div class="report-text">${formatReportMarkdown(report)}</div>`;
+    }
+
     function onGenerateReportClick() {
         const team1 = selectTeam1.value;
         const team2 = selectTeam2.value;
@@ -210,7 +222,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 return res.json();
             })
             .then(data => {
-                reportStatus.innerText = `Expert BBC report for ${team1} vs ${team2}`;
+                reportStatus.innerText = data.cached
+                    ? `Saved BBC report for ${team1} vs ${team2}`
+                    : `New BBC report saved for ${team1} vs ${team2}`;
                 reportContent.innerHTML = `<div class="report-text">${formatReportMarkdown(data.report)}</div>`;
             })
             .catch(err => {
@@ -248,6 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Populate stats
                 updateStatsView(data);
+                displaySavedReport(data.saved_report, team1, team2);
             })
             .catch(err => {
                 dot.className = 'status-dot green';
@@ -293,10 +308,15 @@ document.addEventListener('DOMContentLoaded', () => {
         updateAverageGoalsBar('avgConcededLabel1', 'avgConcededVal1', 'avgConcededFill1', t1, data.avg_conceded_t1);
         updateAverageGoalsBar('avgConcededLabel2', 'avgConcededVal2', 'avgConcededFill2', t2, data.avg_conceded_t2);
 
-        // Draw interactive charts
-        drawH2HPieChart(data);
-        drawGoalsBarChart(data);
-        drawSeasonsChart(data);
+        // Draw interactive charts only when the external Chart.js library loaded.
+        // A temporary CDN failure should never stop the rest of the comparison.
+        if (typeof window.Chart !== 'undefined') {
+            drawH2HPieChart(data);
+            drawGoalsBarChart(data);
+            drawSeasonsChart(data);
+        } else {
+            console.warn('Chart.js did not load; comparison charts were skipped.');
+        }
 
         // Fill tables
         populateSeasonGoalsTable(data.season_goals);
