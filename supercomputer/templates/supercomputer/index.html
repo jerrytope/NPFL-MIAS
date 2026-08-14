@@ -1,0 +1,171 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NPFL Super Computer — Predictions Dashboard</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Orbitron:wght@400;600;700;800&display=swap" rel="stylesheet">
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Super Computer CSS -->
+    <link rel="stylesheet" href="{% static 'supercomputer/style.css' %}">
+</head>
+<body>
+    <!-- Background grid effect -->
+    <div class="bg-grid"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="sc-header">
+            <div class="header-inner">
+                <div class="header-left">
+                    <a href="/" class="back-link" title="Back to Dashboard">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <div class="title-block">
+                        <h1 class="sc-title">
+                            <i class="fas fa-microchip"></i>
+                            NPFL Super Computer
+                        </h1>
+                        <p class="sc-subtitle">AI-Powered Match Predictions — 2026/27 Season</p>
+                    </div>
+                </div>
+                <div class="header-right">
+                    <button id="recalculateBtn" class="btn-recalculate" title="Recalculate predictions">
+                        <i class="fas fa-sync-alt"></i>
+                        <span>Recalculate</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Filter Bar -->
+        <section class="filter-bar">
+            <div class="filter-inner">
+                <div class="filter-group">
+                    <label for="snapshotSelect">
+                        <i class="fas fa-clock"></i> Snapshot
+                    </label>
+                    <select id="snapshotSelect">
+                        {% for s in snapshots %}
+                        <option value="{{ s.id }}" {% if s.is_latest %}selected{% endif %}>
+                            {{ s.version_label }}{% if s.is_latest %} (Latest){% endif %}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="matchDaySelect">
+                        <i class="fas fa-calendar-alt"></i> Match Day
+                    </label>
+                    <select id="matchDaySelect">
+                        <option value="">All Match Days</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label for="teamSelect">
+                        <i class="fas fa-futbol"></i> Team
+                    </label>
+                    <select id="teamSelect">
+                        <option value="">All Teams</option>
+                    </select>
+                </div>
+
+                <button id="clearFilters" class="btn-clear">
+                    <i class="fas fa-times"></i> Clear
+                </button>
+            </div>
+
+            <!-- Active Filters -->
+            <div id="activeFilters" class="active-filters" style="display:none;"></div>
+        </section>
+
+        <!-- Summary Stats Banner -->
+        <section class="stats-banner">
+            <div class="stat-card">
+                <div class="stat-icon"><i class="fas fa-gamepad"></i></div>
+                <div class="stat-info">
+                    <span class="stat-value" id="statTotal">0</span>
+                    <span class="stat-label">Games Shown</span>
+                </div>
+            </div>
+            <div class="stat-card stat-home">
+                <div class="stat-icon"><i class="fas fa-home"></i></div>
+                <div class="stat-info">
+                    <span class="stat-value" id="statHomeWins">0</span>
+                    <span class="stat-label">Home Wins</span>
+                </div>
+            </div>
+            <div class="stat-card stat-draw">
+                <div class="stat-icon"><i class="fas fa-handshake"></i></div>
+                <div class="stat-info">
+                    <span class="stat-value" id="statDraws">0</span>
+                    <span class="stat-label">Draws</span>
+                </div>
+            </div>
+            <div class="stat-card stat-away">
+                <div class="stat-icon"><i class="fas fa-plane"></i></div>
+                <div class="stat-info">
+                    <span class="stat-value" id="statAwayWins">0</span>
+                    <span class="stat-label">Away Wins</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Loading State -->
+        <div id="loadingState" class="loading-state">
+            <div class="spinner"></div>
+            <p>Computing predictions...</p>
+        </div>
+
+        <!-- Predictions Grid -->
+        <main id="predictionsGrid" class="predictions-grid"></main>
+
+        <!-- Pagination -->
+        <nav id="pagination" class="pagination" style="display:none;"></nav>
+
+        <!-- Empty State -->
+        <div id="emptyState" class="empty-state" style="display:none;">
+            <i class="fas fa-robot"></i>
+            <h3>No predictions available</h3>
+            <p>Run <code>python manage.py generate_predictions</code> to generate predictions.</p>
+        </div>
+    </div>
+
+    <!-- Recalculate Modal -->
+    <div id="recalcModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h3><i class="fas fa-sync-alt"></i> Recalculate Predictions</h3>
+            <p>This will create a new prediction snapshot using the latest match data.</p>
+            <div class="modal-form">
+                <label>
+                    Version Label:
+                    <input type="text" id="recalcLabel" value="Recalculated" placeholder="e.g. After Match Day 10">
+                </label>
+                <label>
+                    Computed After Match Day:
+                    <input type="number" id="recalcMatchDay" value="0" min="0" max="38">
+                </label>
+            </div>
+            <div class="modal-actions">
+                <button id="recalcConfirm" class="btn-confirm">
+                    <i class="fas fa-check"></i> Run Predictions
+                </button>
+                <button id="recalcCancel" class="btn-cancel">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Super Computer JS -->
+    <script src="{% static 'supercomputer/script.js' %}"></script>
+</body>
+</html>
