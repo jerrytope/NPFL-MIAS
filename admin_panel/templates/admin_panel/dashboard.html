@@ -1,0 +1,66 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block nav_dashboard %}active{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<!-- Stats -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-calendar-days"></i></div>
+        <div>
+            <div class="stat-value">{{ fixture_count }}</div>
+            <div class="stat-label">Total Fixtures</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-chart-line"></i></div>
+        <div>
+            <div class="stat-value">{{ prediction_count }}</div>
+            <div class="stat-label">Predictions</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon amber"><i class="fas fa-pen-to-square"></i></div>
+        <div>
+            <div class="stat-value">{{ edited_count }}</div>
+            <div class="stat-label">Manually Edited</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple"><i class="fas fa-calendar-check"></i></div>
+        <div>
+            <div class="stat-value">{{ match_day_count }}</div>
+            <div class="stat-label">Match Days</div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="section-header">
+    <h3>Quick Actions</h3>
+</div>
+<div class="quick-actions">
+    <a href="{% url 'admin_panel:predictions' %}" class="action-card">
+        <i class="fas fa-chart-line"></i>
+        <div>
+            <div class="action-title">Edit Predictions</div>
+            <div class="action-desc">Override prediction percentages per fixture</div>
+        </div>
+    </a>
+    <a href="{% url 'admin_panel:fixtures' %}" class="action-card">
+        <i class="fas fa-upload"></i>
+        <div>
+            <div class="action-title">Upload Fixtures</div>
+            <div class="action-desc">Import new fixture schedule from Excel/CSV</div>
+        </div>
+    </a>
+    <a href="{% url 'admin_panel:reports' %}" class="action-card">
+        <i class="fas fa-file-lines"></i>
+        <div>
+            <div class="action-title">Manage Reports</div>
+            <div class="action-desc">Write or generate AI match analysis reports</div>
+        </div>
+    </a>
+</div>
+{% endblock %}

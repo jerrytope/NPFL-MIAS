@@ -38,6 +38,7 @@ class TeamComparisonReport(models.Model):
 	team_one = models.CharField(max_length=200)
 	team_two = models.CharField(max_length=200)
 	report = models.TextField()
+	ai_generated = models.BooleanField(default=True)
 	created_at = models.DateTimeField(auto_now_add=True)
 	updated_at = models.DateTimeField(auto_now=True)
 

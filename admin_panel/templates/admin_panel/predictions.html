@@ -1,0 +1,328 @@
+{% extends 'admin_panel/base.html' %}
+{% load static %}
+
+{% block nav_predictions %}active{% endblock %}
+{% block page_title %}Predictions{% endblock %}
+
+{% block content %}
+<!-- Toolbar -->
+<div class="filter-bar">
+    <div class="form-group">
+        <label>Match Day</label>
+        <select id="filterMatchDay" class="form-control" style="width:160px;">
+            <option value="">All Match Days</option>
+            {% for md in match_days %}
+            <option value="{{ md }}">Match Day {{ md }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div style="flex:1;"></div>
+    <button type="button" class="btn btn-primary" id="btnGenerate" style="cursor:pointer; z-index:10; position:relative;" onclick="openModal('genModal')">
+        <i class="fas fa-magic"></i> Generate Predictions
+    </button>
+</div>
+
+<!-- Stats Row -->
+<div class="stats-grid" style="margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-gamepad"></i></div>
+        <div>
+            <div class="stat-value" id="statShown">0</div>
+            <div class="stat-label">Shown</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-home"></i></div>
+        <div>
+            <div class="stat-value" id="statHome">0</div>
+            <div class="stat-label">Home Wins</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon amber"><i class="fas fa-handshake"></i></div>
+        <div>
+            <div class="stat-value" id="statDraw">0</div>
+            <div class="stat-label">Draws</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon purple"><i class="fas fa-plane"></i></div>
+        <div>
+            <div class="stat-value" id="statAway">0</div>
+            <div class="stat-label">Away Wins</div>
+        </div>
+    </div>
+</div>
+
+<!-- Predictions Table -->
+<div class="data-table-wrapper" id="tableWrapper">
+    <table class="data-table" id="predictionsTable">
+        <thead>
+            <tr>
+                <th>MD</th>
+                <th>Home</th>
+                <th>Away</th>
+                <th>Home %</th>
+                <th>Draw %</th>
+                <th>Away %</th>
+                <th>Result</th>
+                <th>Conf.</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="predictionsBody">
+        </tbody>
+    </table>
+</div>
+
+<!-- Empty state -->
+<div id="emptyState" class="empty-state" style="display:none;">
+    <i class="fas fa-robot"></i>
+    <h3>No predictions yet</h3>
+    <p>Click "Generate Predictions" to create predictions for all fixtures.</p>
+</div>
+
+<!-- Generate Predictions Modal -->
+<div class="modal-overlay" id="genModal">
+    <div class="modal-box">
+        <div class="modal-header">
+            <h3><i class="fas fa-magic"></i> Generate Predictions</h3>
+            <button class="modal-close" onclick="closeModal('genModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <p style="margin-bottom:16px; color:var(--color-text-muted); font-size:13px;">
+                Choose how to generate predictions. The 10% away-win calibration will be applied automatically.
+            </p>
+            <div class="form-group">
+                <label>Mode</label>
+                <select id="genMode" class="form-control">
+                    <option value="all">Generate all (replace existing predictions)</option>
+                    <option value="from_md">Regenerate from match day onwards (keep earlier days)</option>
+                </select>
+            </div>
+            <div class="form-group" id="startMdGroup" style="display:none;">
+                <label>Starting Match Day</label>
+                <select id="startMatchDay" class="form-control">
+                    {% for md in all_match_days %}
+                    <option value="{{ md }}">Match Day {{ md }}</option>
+                    {% endfor %}
+                </select>
+                <small style="color:var(--color-text-muted); font-size:12px;">
+                    Predictions from this match day to the last will be regenerated. Earlier days stay unchanged.
+                </small>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('genModal')">Cancel</button>
+            <button type="button" class="btn btn-primary" id="btnConfirmGenerate" onclick="handleGenerate()">
+                <i class="fas fa-check"></i> Run Predictions
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Save Toast -->
+<div id="saveToast" style="display:none; position:fixed; bottom:24px; right:24px; background:#10b981; color:#fff; padding:12px 20px; border-radius:8px; font-weight:600; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:9999;">
+    <i class="fas fa-check"></i> <span id="toastMsg">Prediction saved</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ predictions_data|json_script:"predictions-data" }}
+<script>
+// ---------- Utility functions (defined first so inline handlers work) ----------
+function getCookie(name) {
+    const value = '; ' + document.cookie;
+    const parts = value.split('; ' + name + '=');
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+}
+
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function showToast(msg) {
+    const toast = document.getElementById('saveToast');
+    document.getElementById('toastMsg').textContent = msg || 'Saved';
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3000);
+}
+
+// ---------- Data ----------
+let predictionsData = [];
+try {
+    const el = document.getElementById('predictions-data');
+    if (el) predictionsData = JSON.parse(el.textContent);
+} catch(e) {
+    console.error('Failed to parse predictions data:', e);
+}
+const csrfToken = getCookie('csrftoken');
+
+// ---------- Init ----------
+document.addEventListener('DOMContentLoaded', () => {
+    renderTable(predictionsData);
+    updateStats(predictionsData);
+
+    const filterMD = document.getElementById('filterMatchDay');
+    if (filterMD) filterMD.addEventListener('change', applyFilter);
+
+    const btnGen = document.getElementById('btnGenerate');
+    if (btnGen) btnGen.addEventListener('click', () => openModal('genModal'));
+
+    const btnConfirm = document.getElementById('btnConfirmGenerate');
+    if (btnConfirm) btnConfirm.addEventListener('click', handleGenerate);
+
+    const genMode = document.getElementById('genMode');
+    if (genMode) genMode.addEventListener('change', function() {
+        document.getElementById('startMdGroup').style.display = this.value === 'from_md' ? 'block' : 'none';
+    });
+});
+
+function applyFilter() {
+    const md = document.getElementById('filterMatchDay').value;
+    const filtered = md ? predictionsData.filter(p => p.match_day === parseInt(md)) : predictionsData;
+    renderTable(filtered);
+    updateStats(filtered);
+}
+
+function renderTable(data) {
+    const tbody = document.getElementById('predictionsBody');
+    const tableWrapper = document.getElementById('tableWrapper');
+    const emptyState = document.getElementById('emptyState');
+
+    if (!data || data.length === 0) {
+        tableWrapper.style.display = 'none';
+        emptyState.style.display = 'block';
+        document.getElementById('statShown').textContent = '0';
+        return;
+    }
+
+    tableWrapper.style.display = 'block';
+    emptyState.style.display = 'none';
+    tbody.innerHTML = '';
+
+    data.forEach(p => {
+        const tr = document.createElement('tr');
+        tr.dataset.id = p.id;
+
+        const resultBadge = p.predicted_result === 'HOME' ? 'badge-home' :
+                           p.predicted_result === 'DRAW' ? 'badge-draw' : 'badge-away';
+
+        tr.innerHTML = `
+            <td><strong>${p.match_day}</strong></td>
+            <td>${p.home}</td>
+            <td>${p.away}</td>
+            <td><input type="number" step="0.1" min="0" max="100" class="inline-input" value="${p.home_win_pct}" data-field="home_win_pct"></td>
+            <td><input type="number" step="0.1" min="0" max="100" class="inline-input" value="${p.draw_pct}" data-field="draw_pct"></td>
+            <td><input type="number" step="0.1" min="0" max="100" class="inline-input" value="${p.away_win_pct}" data-field="away_win_pct"></td>
+            <td><span class="badge ${resultBadge}" data-result>${p.predicted_result}</span></td>
+            <td data-confidence>${p.confidence.toFixed(1)}%</td>
+            <td>${p.manually_edited ? '<span class="badge badge-edited"><i class="fas fa-pen"></i> Edited</span>' : '<span class="badge badge-info">Auto</span>'}</td>
+            <td><button class="btn btn-sm btn-success btn-save-row"><i class="fas fa-save"></i> Save</button></td>
+        `;
+
+        const saveBtn = tr.querySelector('.btn-save-row');
+        saveBtn.addEventListener('click', () => saveRow(tr, p.id));
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById('statShown').textContent = data.length;
+}
+
+function updateStats(data) {
+    const home = data.filter(p => p.predicted_result === 'HOME').length;
+    const draw = data.filter(p => p.predicted_result === 'DRAW').length;
+    const away = data.filter(p => p.predicted_result === 'AWAY').length;
+    const el = (id) => document.getElementById(id);
+    if (el('statHome')) el('statHome').textContent = home;
+    if (el('statDraw')) el('statDraw').textContent = draw;
+    if (el('statAway')) el('statAway').textContent = away;
+}
+
+async function saveRow(tr, predictionId) {
+    const inputs = tr.querySelectorAll('.inline-input');
+    const payload = {};
+    inputs.forEach(inp => { payload[inp.dataset.field] = parseFloat(inp.value); });
+
+    const total = payload.home_win_pct + payload.draw_pct + payload.away_win_pct;
+    if (Math.abs(total - 100) > 1) {
+        alert('Percentages must sum to 100%. Currently: ' + total.toFixed(1));
+        return;
+    }
+
+    try {
+        const res = await fetch('/admin/api/predictions/' + predictionId + '/', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Save failed'); return; }
+
+        // Update UI
+        const resultBadge = tr.querySelector('[data-result]');
+        resultBadge.textContent = data.predicted_result;
+        resultBadge.className = 'badge ' + (data.predicted_result === 'HOME' ? 'badge-home' : data.predicted_result === 'DRAW' ? 'badge-draw' : 'badge-away');
+        tr.querySelector('[data-confidence]').textContent = data.confidence.toFixed(1) + '%';
+
+        const statusTd = tr.querySelectorAll('td')[8];
+        statusTd.innerHTML = '<span class="badge badge-edited"><i class="fas fa-pen"></i> Edited</span>';
+
+        // Update local data
+        const idx = predictionsData.findIndex(p => p.id === predictionId);
+        if (idx >= 0) {
+            predictionsData[idx].home_win_pct = data.home_win_pct;
+            predictionsData[idx].draw_pct = data.draw_pct;
+            predictionsData[idx].away_win_pct = data.away_win_pct;
+            predictionsData[idx].predicted_result = data.predicted_result;
+            predictionsData[idx].confidence = data.confidence;
+            predictionsData[idx].manually_edited = true;
+        }
+
+        showToast('Prediction saved');
+    } catch (err) {
+        alert('Save failed: ' + err.message);
+    }
+}
+
+async function handleGenerate() {
+    const mode = document.getElementById('genMode').value;
+    const startMd = document.getElementById('startMatchDay').value || 1;
+
+    const btn = document.getElementById('btnConfirmGenerate');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Running...';
+
+    const formData = new FormData();
+    formData.append('mode', mode);
+    formData.append('start_match_day', startMd);
+
+    try {
+        const res = await fetch('/admin/predictions/generate/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) {
+            alert(data.error || 'Generation failed');
+            return;
+        }
+
+        closeModal('genModal');
+        showToast(data.message);
+        location.reload();
+    } catch (err) {
+        alert('Generation failed: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Run Predictions';
+    }
+}
+
+</script>
+{% endblock %}

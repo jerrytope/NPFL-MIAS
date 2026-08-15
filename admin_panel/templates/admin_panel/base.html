@@ -1,0 +1,77 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NPFL Admin Panel{% endblock %}</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'admin_panel/style.css' %}">
+</head>
+<body>
+    <div class="admin-layout">
+        <!-- Sidebar -->
+        <aside class="admin-sidebar">
+            <div class="sidebar-brand">
+                <i class="fas fa-shield-halved"></i>
+                <span>NPFL Admin</span>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="{% url 'admin_panel:dashboard' %}" class="nav-link {% block nav_dashboard %}{% endblock %}">
+                    <i class="fas fa-gauge-high"></i>
+                    <span>Dashboard</span>
+                </a>
+                <a href="{% url 'admin_panel:predictions' %}" class="nav-link {% block nav_predictions %}{% endblock %}">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Predictions</span>
+                </a>
+                <a href="{% url 'admin_panel:fixtures' %}" class="nav-link {% block nav_fixtures %}{% endblock %}">
+                    <i class="fas fa-calendar-days"></i>
+                    <span>Fixtures</span>
+                </a>
+                <a href="{% url 'admin_panel:reports' %}" class="nav-link {% block nav_reports %}{% endblock %}">
+                    <i class="fas fa-file-lines"></i>
+                    <span>Reports</span>
+                </a>
+                <div class="nav-divider"></div>
+                <a href="/" class="nav-link" title="Back to public dashboard">
+                    <i class="fas fa-arrow-left"></i>
+                    <span>Back to App</span>
+                </a>
+            </nav>
+        </aside>
+
+        <!-- Main content -->
+        <div class="admin-main">
+            <header class="admin-header">
+                <h2 class="page-title">{% block page_title %}Dashboard{% endblock %}</h2>
+                <div class="header-user">
+                    <span class="user-name">{{ request.user.username }}</span>
+                    <a href="{% url 'admin_logout' %}" class="btn-logout" title="Logout">
+                        <i class="fas fa-right-from-bracket"></i>
+                    </a>
+                </div>
+            </header>
+
+            {% if messages %}
+            <div class="messages-bar">
+                {% for message in messages %}
+                <div class="message {{ message.tags }}">{{ message }}</div>
+                {% endfor %}
+            </div>
+            {% endif %}
+
+            <main class="admin-content">
+                {% block content %}
+                {% endblock %}
+            </main>
+        </div>
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>

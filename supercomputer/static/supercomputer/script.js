@@ -8,7 +8,6 @@ const ITEMS_PER_PAGE = 10;
 let allPredictions = [];
 let filteredPredictions = [];
 let currentPage = 1;
-let currentSnapshot = null;
 let teams = new Set();
 let matchDays = new Set();
 
@@ -17,7 +16,6 @@ const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
 const els = {
-    snapshotSelect: $('#snapshotSelect'),
     matchDaySelect: $('#matchDaySelect'),
     teamSelect: $('#teamSelect'),
     clearFilters: $('#clearFilters'),
@@ -30,12 +28,6 @@ const els = {
     pagination: $('#pagination'),
     loading: $('#loadingState'),
     empty: $('#emptyState'),
-    recalculateBtn: $('#recalculateBtn'),
-    recalcModal: $('#recalcModal'),
-    recalcConfirm: $('#recalcConfirm'),
-    recalcCancel: $('#recalcCancel'),
-    recalcLabel: $('#recalcLabel'),
-    recalcMatchDay: $('#recalcMatchDay'),
 };
 
 // ---------- Initialization ----------
@@ -47,24 +39,19 @@ async function init() {
 }
 
 function bindEvents() {
-    els.snapshotSelect.addEventListener('change', loadPredictions);
     els.matchDaySelect.addEventListener('change', applyFilters);
     els.teamSelect.addEventListener('change', applyFilters);
     els.clearFilters.addEventListener('click', clearFilters);
-    els.recalculateBtn.addEventListener('click', () => els.recalcModal.style.display = 'flex');
-    els.recalcCancel.addEventListener('click', () => els.recalcModal.style.display = 'none');
-    els.recalcConfirm.addEventListener('click', handleRecalculate);
 }
 
 // ---------- Data Loading ----------
 async function loadPredictions() {
     showLoading(true);
 
-    const snapshotId = els.snapshotSelect.value;
     const matchDay = els.matchDaySelect.value;
     const team = els.teamSelect.value;
 
-    let url = `${API_BASE}/predictions/?snapshot=${snapshotId}`;
+    let url = `${API_BASE}/predictions/?`;
     if (matchDay) url += `&match_day=${matchDay}`;
     if (team) url += `&team=${encodeURIComponent(team)}`;
 
@@ -78,11 +65,9 @@ async function loadPredictions() {
             return;
         }
 
-        currentSnapshot = data.snapshot;
         allPredictions = data.results;
         filteredPredictions = allPredictions;
 
-        // Populate filter options from data
         populateFilterOptions();
         applyFilters();
 
@@ -96,7 +81,6 @@ async function loadPredictions() {
 }
 
 function populateFilterOptions() {
-    // Collect unique teams and match days
     teams = new Set();
     matchDays = new Set();
 
@@ -106,7 +90,6 @@ function populateFilterOptions() {
         matchDays.add(p.match_day);
     });
 
-    // Populate match day select (only if not already populated)
     const currentMD = els.matchDaySelect.value;
     if (els.matchDaySelect.options.length <= 1) {
         const sortedMDs = [...matchDays].sort((a, b) => a - b);
@@ -118,7 +101,6 @@ function populateFilterOptions() {
         });
     }
 
-    // Populate team select (only if not already populated)
     if (els.teamSelect.options.length <= 1) {
         const sortedTeams = [...teams].sort();
         sortedTeams.forEach(t => {
@@ -129,7 +111,6 @@ function populateFilterOptions() {
         });
     }
 
-    // Restore previous filter selections
     if (currentMD) els.matchDaySelect.value = currentMD;
 }
 
@@ -218,7 +199,6 @@ function renderPredictions() {
     let lastMD = null;
 
     pageData.forEach((p, i) => {
-        // Match day separator
         if (p.match_day !== lastMD) {
             lastMD = p.match_day;
             const header = document.createElement('div');
@@ -301,7 +281,6 @@ function createPredictionCard(p) {
         </div>
     `;
 
-    // Animate bars after insertion
     requestAnimationFrame(() => {
         setTimeout(() => {
             const bars = card.querySelectorAll('.prob-bar-fill');
@@ -335,7 +314,6 @@ function renderPagination() {
     els.pagination.style.display = 'flex';
     els.pagination.innerHTML = '';
 
-    // Prev button
     const prevBtn = createPageBtn('<i class="fas fa-chevron-left"></i>', currentPage > 1, () => {
         currentPage--;
         renderPredictions();
@@ -344,7 +322,6 @@ function renderPagination() {
     });
     els.pagination.appendChild(prevBtn);
 
-    // Page numbers
     const range = getPageRange(currentPage, totalPages);
     range.forEach(page => {
         if (page === '...') {
@@ -364,7 +341,6 @@ function renderPagination() {
         }
     });
 
-    // Next button
     const nextBtn = createPageBtn('<i class="fas fa-chevron-right"></i>', currentPage < totalPages, () => {
         currentPage++;
         renderPredictions();
@@ -403,65 +379,6 @@ function getPageRange(current, total) {
 
 function scrollToTop() {
     window.scrollTo({ top: els.grid.offsetTop - 20, behavior: 'smooth' });
-}
-
-// ---------- Recalculate ----------
-async function handleRecalculate() {
-    const label = els.recalcLabel.value || 'Recalculated';
-    const matchDay = parseInt(els.recalcMatchDay.value) || 0;
-
-    els.recalcModal.style.display = 'none';
-    els.recalculateBtn.classList.add('loading');
-
-    try {
-        const formData = new FormData();
-        formData.append('label', label);
-        formData.append('match_day', matchDay);
-
-        // Get CSRF token
-        const csrfToken = getCookie('csrftoken');
-
-        const res = await fetch(`${API_BASE}/recalculate/`, {
-            method: 'POST',
-            headers: {
-                'X-CSRFToken': csrfToken,
-            },
-            body: formData,
-        });
-
-        const data = await res.json();
-
-        if (res.ok) {
-            // Refresh snapshot list and reload
-            await refreshSnapshots();
-            await loadPredictions();
-        } else {
-            alert(`Error: ${data.error || 'Failed to recalculate'}`);
-        }
-    } catch (err) {
-        console.error('Recalculate failed:', err);
-        alert('Failed to recalculate predictions. Check the console for details.');
-    } finally {
-        els.recalculateBtn.classList.remove('loading');
-    }
-}
-
-async function refreshSnapshots() {
-    try {
-        const res = await fetch(`${API_BASE}/snapshots/`);
-        const data = await res.json();
-
-        els.snapshotSelect.innerHTML = '';
-        data.snapshots.forEach(s => {
-            const opt = document.createElement('option');
-            opt.value = s.id;
-            opt.textContent = `${s.version_label}${s.is_latest ? ' (Latest)' : ''}`;
-            if (s.is_latest) opt.selected = true;
-            els.snapshotSelect.appendChild(opt);
-        });
-    } catch (err) {
-        console.error('Failed to refresh snapshots:', err);
-    }
 }
 
 // ---------- Helpers ----------

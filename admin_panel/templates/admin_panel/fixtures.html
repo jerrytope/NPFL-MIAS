@@ -1,0 +1,249 @@
+{% extends 'admin_panel/base.html' %}
+{% load static %}
+
+{% block nav_fixtures %}active{% endblock %}
+{% block page_title %}Fixtures{% endblock %}
+
+{% block content %}
+<!-- Upload Section -->
+<div class="section-header">
+    <h3>Upload New Fixtures</h3>
+</div>
+
+<div class="data-table-wrapper" style="margin-bottom:32px; padding:24px;">
+    <div class="upload-zone" id="uploadZone">
+        <i class="fas fa-cloud-arrow-up"></i>
+        <p><strong>Drop your file here</strong> or click to browse</p>
+        <p style="font-size:12px; margin-top:4px;">Supports .xlsx, .xls, .csv</p>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none;">
+    </div>
+
+    <div id="columnMapping" style="display:none; margin-top:24px;">
+        <h4 style="margin-bottom:12px; font-size:14px;">Column Mapping</h4>
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            <div class="form-group" style="flex:1; min-width:150px;">
+                <label>Home Team Column</label>
+                <input type="text" id="homeCol" class="form-control" value="home">
+            </div>
+            <div class="form-group" style="flex:1; min-width:150px;">
+                <label>Away Team Column</label>
+                <input type="text" id="awayCol" class="form-control" value="away">
+            </div>
+            <div class="form-group" style="flex:1; min-width:150px;">
+                <label>Match Day Column</label>
+                <input type="text" id="mdCol" class="form-control" value="match_day">
+            </div>
+            <div class="form-group" style="flex:1; min-width:150px;">
+                <label>Season</label>
+                <input type="text" id="importSeason" class="form-control" value="{{ season }}">
+            </div>
+        </div>
+        <div class="form-group">
+            <label>Import Mode</label>
+            <div style="display:flex; gap:16px;">
+                <label style="font-weight:400; display:flex; align-items:center; gap:6px;">
+                    <input type="radio" name="importMode" value="append" checked> Append to existing
+                </label>
+                <label style="font-weight:400; display:flex; align-items:center; gap:6px;">
+                    <input type="radio" name="importMode" value="replace"> Replace all existing
+                </label>
+            </div>
+        </div>
+        <button class="btn btn-primary" id="btnPreview">
+            <i class="fas fa-eye"></i> Preview
+        </button>
+    </div>
+</div>
+
+<!-- Preview Section -->
+<div id="previewSection" style="display:none;">
+    <div class="section-header">
+        <h3>Preview (<span id="previewCount">0</span> fixtures)</h3>
+        <button class="btn btn-success" id="btnConfirmImport">
+            <i class="fas fa-check"></i> Confirm Import
+        </button>
+    </div>
+
+    <div id="unknownTeamsWarning" style="display:none; background:#fef3c7; border:1px solid #f59e0b; border-radius:8px; padding:12px 16px; margin-bottom:16px;">
+        <strong><i class="fas fa-triangle-exclamation"></i> Unknown Teams:</strong>
+        <span id="unknownTeamsList"></span>
+        <p style="font-size:12px; margin-top:4px; color:#92400e;">These teams will be auto-created in the database.</p>
+    </div>
+
+    <div class="data-table-wrapper">
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Match Day</th>
+                    <th>Home</th>
+                    <th>Away</th>
+                </tr>
+            </thead>
+            <tbody id="previewBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Current Fixtures -->
+{% if grouped_fixtures %}
+<div style="margin-top:32px;">
+    <div class="section-header">
+        <h3>Current Fixtures ({{ fixture_count }} total)</h3>
+    </div>
+    {% for md, fixts in grouped_fixtures.items %}
+    <div class="match-day-group">
+        <h4>Match Day {{ md }}</h4>
+        <div class="data-table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Home</th>
+                        <th>Away</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for f in fixts %}
+                    <tr>
+                        <td>{{ f.home.name }}</td>
+                        <td>{{ f.away.name }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state" style="margin-top:32px;">
+    <i class="fas fa-calendar-days"></i>
+    <h3>No fixtures yet</h3>
+    <p>Upload a fixture file above or run <code>python manage.py generate_fixtures</code></p>
+</div>
+{% endif %}
+
+<!-- Import Success Toast -->
+<div id="importToast" style="display:none; position:fixed; bottom:24px; right:24px; background:#10b981; color:#fff; padding:12px 20px; border-radius:8px; font-weight:600; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:9999;">
+    <i class="fas fa-check"></i> <span id="importToastMsg">Imported</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const csrfToken = getCookie('csrftoken');
+let previewRows = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    const zone = document.getElementById('uploadZone');
+    const input = document.getElementById('fileInput');
+
+    zone.addEventListener('click', () => input.click());
+    zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        zone.classList.remove('dragover');
+        if (e.dataTransfer.files.length) {
+            input.files = e.dataTransfer.files;
+            onFileSelected();
+        }
+    });
+    input.addEventListener('change', onFileSelected);
+
+    document.getElementById('btnPreview').addEventListener('click', handlePreview);
+    document.getElementById('btnConfirmImport').addEventListener('click', handleConfirmImport);
+});
+
+function onFileSelected() {
+    document.getElementById('columnMapping').style.display = 'block';
+    document.getElementById('previewSection').style.display = 'none';
+}
+
+async function handlePreview() {
+    const fileInput = document.getElementById('fileInput');
+    if (!fileInput.files.length) { alert('Please select a file first.'); return; }
+
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    formData.append('home_col', document.getElementById('homeCol').value);
+    formData.append('away_col', document.getElementById('awayCol').value);
+    formData.append('md_col', document.getElementById('mdCol').value);
+
+    try {
+        const res = await fetch('/admin/fixtures/preview/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrfToken },
+            body: formData,
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Preview failed'); return; }
+
+        previewRows = data.rows;
+        document.getElementById('previewCount').textContent = data.total;
+
+        // Render preview table
+        const tbody = document.getElementById('previewBody');
+        tbody.innerHTML = '';
+        data.rows.forEach(r => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `<td>${r.match_day}</td><td>${r.home}</td><td>${r.away}</td>`;
+            tbody.appendChild(tr);
+        });
+
+        // Unknown teams warning
+        if (data.unknown_teams.length > 0) {
+            document.getElementById('unknownTeamsWarning').style.display = 'block';
+            document.getElementById('unknownTeamsList').textContent = data.unknown_teams.join(', ');
+        } else {
+            document.getElementById('unknownTeamsWarning').style.display = 'none';
+        }
+
+        document.getElementById('previewSection').style.display = 'block';
+    } catch (err) {
+        alert('Preview failed: ' + err.message);
+    }
+}
+
+async function handleConfirmImport() {
+    if (!previewRows.length) { alert('No data to import.'); return; }
+
+    const mode = document.querySelector('input[name="importMode"]:checked').value;
+    const season = document.getElementById('importSeason').value || '26/27';
+
+    const btn = document.getElementById('btnConfirmImport');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing...';
+
+    try {
+        const res = await fetch('/admin/fixtures/confirm/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({ rows: previewRows, mode: mode, season: season }),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Import failed'); return; }
+
+        const toast = document.getElementById('importToast');
+        document.getElementById('importToastMsg').textContent =
+            `Imported ${data.created} fixtures (${data.skipped} skipped)`;
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; location.reload(); }, 2500);
+    } catch (err) {
+        alert('Import failed: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Confirm Import';
+    }
+}
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+}
+</script>
+{% endblock %}

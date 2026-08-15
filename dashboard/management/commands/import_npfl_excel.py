@@ -44,22 +44,29 @@ class Command(BaseCommand):
                 self.stderr.write(f'Missing expected column: {c}')
                 return
 
-        # Create/get teams
-        team_names = set(df['home'].dropna().astype(str).str.strip().unique()) | set(df['away'].dropna().astype(str).str.strip().unique())
+        # Create/get teams — normalize to lowercase to avoid MySQL case-insensitive collisions
+        raw_names = set(df['home'].dropna().astype(str).str.strip().unique()) | set(df['away'].dropna().astype(str).str.strip().unique())
+        # Deduplicate case-insensitively, keeping the first occurrence
+        seen_lower = {}
+        for n in raw_names:
+            low = n.lower()
+            if low not in seen_lower:
+                seen_lower[low] = n
+        team_names = list(seen_lower.values())
         self.stdout.write(f'Found {len(team_names)} unique teams in sheet')
 
-        existing_teams = {t.name: t for t in Team.objects.filter(name__in=list(team_names))}
+        existing_teams = {t.name.lower(): t for t in Team.objects.all()}
         new_teams = []
         for name in team_names:
-            if name not in existing_teams:
+            if name.lower() not in existing_teams:
                 new_teams.append(Team(name=name))
 
         if new_teams and not dry_run:
-            Team.objects.bulk_create(new_teams)
+            Team.objects.bulk_create(new_teams, ignore_conflicts=True)
             self.stdout.write(f'Created {len(new_teams)} Team records')
 
-        # Reload mapping
-        teams = {t.name: t for t in Team.objects.filter(name__in=list(team_names))}
+        # Reload mapping (case-insensitive lookup)
+        teams = {t.name.lower(): t for t in Team.objects.all()}
 
         matches_to_create = []
         created = 0
@@ -73,8 +80,8 @@ class Command(BaseCommand):
             home_goal = to_int(row.get('home_goal'))
             away_goal = to_int(row.get('away_goal'))
 
-            home = teams.get(home_name)
-            away = teams.get(away_name)
+            home = teams.get(home_name.lower())
+            away = teams.get(away_name.lower())
 
             if not home or not away:
                 skipped += 1

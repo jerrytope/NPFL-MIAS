@@ -12,9 +12,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultsWrapper = document.getElementById('comparisonResults');
     const btnGenerateReport = document.getElementById('btnGenerateReport');
     const reportCard = document.getElementById('reportCard');
+    const reportSource = document.getElementById('reportSource');
+    const reportSourceLabel = document.getElementById('reportSourceLabel');
     const reportStatus = document.getElementById('reportStatus');
     const reportContent = document.getElementById('reportContent');
-    const btnRefresh = document.getElementById('btnRefresh');
     const syncStatus = document.getElementById('syncStatus');
     const rawMatchSearch = document.getElementById('rawMatchSearch');
     
@@ -181,16 +182,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function displaySavedReport(report, team1, team2) {
+    function displaySavedReport(report, team1, team2, aiGenerated) {
         if (!report) {
             reportCard.style.display = 'none';
+            reportSource.style.display = 'none';
             reportStatus.innerText = 'No saved report yet. Click Generate BBC Report to create one.';
             return;
         }
 
         reportCard.style.display = 'block';
-        reportStatus.innerText = `Saved BBC report for ${team1} vs ${team2}`;
+        reportStatus.innerText = `Saved report for ${team1} vs ${team2}`;
         reportContent.innerHTML = `<div class="report-text">${formatReportMarkdown(report)}</div>`;
+
+        // Show source label
+        reportSource.style.display = 'block';
+        reportSourceLabel.innerHTML = aiGenerated
+            ? '<i class="fas fa-robot"></i> AI Generated'
+            : '<i class="fas fa-pen"></i> Human Written';
     }
 
     function onGenerateReportClick() {
@@ -223,9 +231,12 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(data => {
                 reportStatus.innerText = data.cached
-                    ? `Saved BBC report for ${team1} vs ${team2}`
-                    : `New BBC report saved for ${team1} vs ${team2}`;
+                    ? `Saved report for ${team1} vs ${team2}`
+                    : `New report saved for ${team1} vs ${team2}`;
                 reportContent.innerHTML = `<div class="report-text">${formatReportMarkdown(data.report)}</div>`;
+                // Show source label (newly generated is always AI)
+                reportSource.style.display = 'block';
+                reportSourceLabel.innerHTML = '<i class="fas fa-robot"></i> AI Generated';
             })
             .catch(err => {
                 reportStatus.innerText = 'Report generation failed.';
@@ -262,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Populate stats
                 updateStatsView(data);
-                displaySavedReport(data.saved_report, team1, team2);
+                displaySavedReport(data.saved_report, team1, team2, data.report_ai_generated);
             })
             .catch(err => {
                 dot.className = 'status-dot green';
@@ -604,45 +615,4 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-     /* ==========================================================================
-         Database Cache Refresh
-         ========================================================================== */
-
-    btnRefresh.addEventListener('click', () => {
-        // Change state to syncing
-        const dot = syncStatus.querySelector('.status-dot');
-        const txt = syncStatus.querySelector('.status-text');
-        
-        btnRefresh.disabled = true;
-        dot.className = 'status-dot loading';
-        txt.innerText = 'Syncing...';
-        
-        fetch('/refresh/')
-            .then(res => {
-                if (!res.ok) throw new Error('Refresh action failed on server.');
-                return res.json();
-            })
-            .then(data => {
-                btnRefresh.disabled = false;
-                dot.className = 'status-dot green';
-                txt.innerText = 'Cache Synced';
-                
-                // Alert success
-                alert(data.message || 'Data successfully synced from the local database.');
-                
-                // If teams are currently selected, force recalculation
-                if (selectTeam1.value && selectTeam2.value && selectTeam1.value !== selectTeam2.value) {
-                    fetchComparison(selectTeam1.value, selectTeam2.value);
-                } else {
-                    // Just reload the page list of teams in case new teams were added
-                    window.location.reload();
-                }
-            })
-            .catch(err => {
-                btnRefresh.disabled = false;
-                dot.className = 'status-dot green';
-                txt.innerText = 'Sync Failed';
-                alert(`Sync failed: ${err.message}`);
-            });
-    });
 });

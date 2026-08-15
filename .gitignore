@@ -4,3 +4,7 @@ app.py
 logo.png
 db.sqlite3
 myenv/
+.env
+staticfiles/
+*.pyc
+__pycache__/

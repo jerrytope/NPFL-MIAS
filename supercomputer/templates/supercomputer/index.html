@@ -37,31 +37,12 @@
                         <p class="sc-subtitle">AI-Powered Match Predictions — 2026/27 Season</p>
                     </div>
                 </div>
-                <div class="header-right">
-                    <button id="recalculateBtn" class="btn-recalculate" title="Recalculate predictions">
-                        <i class="fas fa-sync-alt"></i>
-                        <span>Recalculate</span>
-                    </button>
-                </div>
             </div>
         </header>
 
         <!-- Filter Bar -->
         <section class="filter-bar">
             <div class="filter-inner">
-                <div class="filter-group">
-                    <label for="snapshotSelect">
-                        <i class="fas fa-clock"></i> Snapshot
-                    </label>
-                    <select id="snapshotSelect">
-                        {% for s in snapshots %}
-                        <option value="{{ s.id }}" {% if s.is_latest %}selected{% endif %}>
-                            {{ s.version_label }}{% if s.is_latest %} (Latest){% endif %}
-                        </option>
-                        {% endfor %}
-                    </select>
-                </div>
-
                 <div class="filter-group">
                     <label for="matchDaySelect">
                         <i class="fas fa-calendar-alt"></i> Match Day
@@ -138,30 +119,6 @@
             <i class="fas fa-robot"></i>
             <h3>No predictions available</h3>
             <p>Run <code>python manage.py generate_predictions</code> to generate predictions.</p>
-        </div>
-    </div>
-
-    <!-- Recalculate Modal -->
-    <div id="recalcModal" class="modal" style="display:none;">
-        <div class="modal-content">
-            <h3><i class="fas fa-sync-alt"></i> Recalculate Predictions</h3>
-            <p>This will create a new prediction snapshot using the latest match data.</p>
-            <div class="modal-form">
-                <label>
-                    Version Label:
-                    <input type="text" id="recalcLabel" value="Recalculated" placeholder="e.g. After Match Day 10">
-                </label>
-                <label>
-                    Computed After Match Day:
-                    <input type="number" id="recalcMatchDay" value="0" min="0" max="38">
-                </label>
-            </div>
-            <div class="modal-actions">
-                <button id="recalcConfirm" class="btn-confirm">
-                    <i class="fas fa-check"></i> Run Predictions
-                </button>
-                <button id="recalcCancel" class="btn-cancel">Cancel</button>
-            </div>
         </div>
     </div>
 

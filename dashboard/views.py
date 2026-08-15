@@ -58,10 +58,12 @@ def compare_teams(request):
     try:
         data = utils.perform_comparison(team1, team2)
         canonical_team_one, canonical_team_two = canonical_team_pair(team1, team2)
-        data['saved_report'] = TeamComparisonReport.objects.filter(
+        report_obj = TeamComparisonReport.objects.filter(
             team_one=canonical_team_one,
             team_two=canonical_team_two,
-        ).values_list('report', flat=True).first()
+        ).first()
+        data['saved_report'] = report_obj.report if report_obj else None
+        data['report_ai_generated'] = report_obj.ai_generated if report_obj else None
         return JsonResponse(data)
     except Exception as e:
         return JsonResponse({'error': f'Failed to calculate analytics: {str(e)}'}, status=500)

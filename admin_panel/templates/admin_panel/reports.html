@@ -1,0 +1,275 @@
+{% extends 'admin_panel/base.html' %}
+{% load static %}
+
+{% block nav_reports %}active{% endblock %}
+{% block page_title %}Match Reports{% endblock %}
+
+{% block content %}
+{% if has_fixtures %}
+<!-- Filter -->
+<div class="filter-bar">
+    <div class="form-group">
+        <label>Match Day</label>
+        <select id="filterReportMD" class="form-control" style="width:160px;">
+            <option value="">All Match Days</option>
+            {% for md in match_days %}
+            <option value="{{ md }}">Match Day {{ md }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="font-size:13px; color:var(--color-text-muted);">
+        <span class="report-status"><span class="dot written"></span> Written</span>
+        &nbsp;&nbsp;
+        <span class="report-status"><span class="dot ai"></span> AI Generated</span>
+        &nbsp;&nbsp;
+        <span class="report-status"><span class="dot empty"></span> Empty</span>
+    </div>
+</div>
+
+<!-- Reports grouped by match day -->
+<div id="reportsContainer">
+    {% for md, items in grouped_reports.items %}
+    <div class="match-day-group" data-md="{{ md }}">
+        <h4>Match Day {{ md }}</h4>
+        <div class="data-table-wrapper">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Home</th>
+                        <th>Away</th>
+                        <th>Status</th>
+                        <th>Report Preview</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in items %}
+                    <tr data-fixture-id="{{ item.fixture_id }}">
+                        <td><strong>{{ item.home }}</strong></td>
+                        <td><strong>{{ item.away }}</strong></td>
+                        <td>
+                            {% if item.status == 'written' %}
+                            <span class="report-status" data-status><span class="dot written"></span> Written</span>
+                            {% elif item.status == 'ai' %}
+                            <span class="report-status" data-status><span class="dot ai"></span> AI</span>
+                            {% else %}
+                            <span class="report-status" data-status><span class="dot empty"></span> Empty</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <span class="report-preview-text">
+                                {% if item.report_text %}
+                                    {{ item.report_text|truncatechars:80 }}
+                                {% else %}
+                                    <em style="color:var(--color-text-muted);">No report yet</em>
+                                {% endif %}
+                            </span>
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-outline btn-edit-report"
+                                data-fixture-id="{{ item.fixture_id }}"
+                                data-home="{{ item.home }}"
+                                data-away="{{ item.away }}"
+                                data-report="{{ item.report_text|escapejs }}">
+                                <i class="fas fa-pen"></i> Edit
+                            </button>
+                            <button class="btn btn-sm btn-primary btn-generate-report"
+                                data-fixture-id="{{ item.fixture_id }}"
+                                data-home="{{ item.home }}"
+                                data-away="{{ item.away }}">
+                                <i class="fas fa-wand-magic-sparkles"></i> AI
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <i class="fas fa-file-lines"></i>
+    <h3>No predictions available</h3>
+    <p>Generate predictions first to see match report slots.</p>
+</div>
+{% endif %}
+
+<!-- Edit Report Modal -->
+<div class="modal-overlay" id="editModal">
+    <div class="modal-box" style="max-width:700px;">
+        <div class="modal-header">
+            <h3 id="editModalTitle">Edit Report</h3>
+            <button class="modal-close" onclick="closeModal('editModal')">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label>Match Analysis Report</label>
+                <textarea id="editReportText" class="form-control" rows="12" placeholder="Write your match analysis here..."></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn btn-outline" onclick="closeModal('editModal')">Cancel</button>
+            <button class="btn btn-success" id="btnSaveReport">
+                <i class="fas fa-save"></i> Save Report
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Save Toast -->
+<div id="saveToast" style="display:none; position:fixed; bottom:24px; right:24px; background:#10b981; color:#fff; padding:12px 20px; border-radius:8px; font-weight:600; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:9999;">
+    <i class="fas fa-check"></i> <span id="saveToastMsg">Saved</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const csrfToken = getCookie('csrftoken');
+let currentFixtureId = null;
+
+document.addEventListener('DOMContentLoaded', () => {
+    document.getElementById('filterReportMD').addEventListener('change', applyReportFilter);
+
+    // Bind edit buttons
+    document.querySelectorAll('.btn-edit-report').forEach(btn => {
+        btn.addEventListener('click', () => {
+            currentFixtureId = btn.dataset.fixtureId;
+            const home = btn.dataset.home;
+            const away = btn.dataset.away;
+            const report = btn.dataset.report;
+
+            document.getElementById('editModalTitle').textContent = `${home} vs ${away}`;
+            document.getElementById('editReportText').value = report || '';
+            openModal('editModal');
+        });
+    });
+
+    // Bind generate buttons
+    document.querySelectorAll('.btn-generate-report').forEach(btn => {
+        btn.addEventListener('click', () => handleGenerate(btn));
+    });
+
+    document.getElementById('btnSaveReport').addEventListener('click', handleSave);
+});
+
+function applyReportFilter() {
+    const md = document.getElementById('filterReportMD').value;
+    document.querySelectorAll('.match-day-group').forEach(group => {
+        if (!md || group.dataset.md === md) {
+            group.style.display = 'block';
+        } else {
+            group.style.display = 'none';
+        }
+    });
+}
+
+async function handleSave() {
+    if (!currentFixtureId) return;
+
+    const reportText = document.getElementById('editReportText').value;
+    const btn = document.getElementById('btnSaveReport');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+    try {
+        const res = await fetch(`/admin/api/reports/${currentFixtureId}/`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify({ report: reportText }),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Save failed'); return; }
+
+        updateRowStatus(currentFixtureId, data.status, reportText);
+        closeModal('editModal');
+        showToast('Report saved');
+    } catch (err) {
+        alert('Save failed: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-save"></i> Save Report';
+    }
+}
+
+async function handleGenerate(btn) {
+    const fixtureId = btn.dataset.fixtureId;
+    const home = btn.dataset.home;
+    const away = btn.dataset.away;
+
+    if (!confirm(`Generate AI report for ${home} vs ${away}?`)) return;
+
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+
+    try {
+        const res = await fetch(`/admin/api/reports/${fixtureId}/generate/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Generation failed'); return; }
+
+        updateRowStatus(fixtureId, data.status, data.report);
+        showToast('AI report generated');
+    } catch (err) {
+        alert('Generation failed: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> AI';
+    }
+}
+
+function updateRowStatus(fixtureId, status, reportText) {
+    const row = document.querySelector(`tr[data-fixture-id="${fixtureId}"]`);
+    if (!row) return;
+
+    // Update status badge
+    const statusTd = row.querySelector('[data-status]');
+    if (status === 'written') {
+        statusTd.innerHTML = '<span class="dot written"></span> Written';
+    } else if (status === 'ai') {
+        statusTd.innerHTML = '<span class="dot ai"></span> AI';
+    } else {
+        statusTd.innerHTML = '<span class="dot empty"></span> Empty';
+    }
+
+    // Update preview text
+    const preview = row.querySelector('.report-preview-text');
+    if (reportText) {
+        preview.textContent = reportText.substring(0, 80) + (reportText.length > 80 ? '...' : '');
+    } else {
+        preview.innerHTML = '<em style="color:var(--color-text-muted);">No report yet</em>';
+    }
+
+    // Update edit button data
+    const editBtn = row.querySelector('.btn-edit-report');
+    if (editBtn) editBtn.dataset.report = reportText || '';
+}
+
+function showToast(msg) {
+    const toast = document.getElementById('saveToast');
+    document.getElementById('saveToastMsg').textContent = msg;
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 2500);
+}
+
+function openModal(id) { document.getElementById(id).classList.add('active'); }
+function closeModal(id) { document.getElementById(id).classList.remove('active'); }
+
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+}
+</script>
+{% endblock %}
