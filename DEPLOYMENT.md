@@ -86,9 +86,9 @@ mysql -u npfl_user -p -e "SHOW DATABASES;"
 ### 3.1 Create App Directory
 
 ```bash
-sudo mkdir -p /opt/npfl
-sudo chown ubuntu:ubuntu /opt/npfl
-cd /opt/npfl
+sudo mkdir -p /opt/npfl/NPFL-MIAS
+sudo chown ubuntu:ubuntu /opt/npfl/NPFL-MIAS
+cd /opt/npfl/NPFL-MIAS
 ```
 
 ### 3.2 Clone Your Repository
@@ -99,7 +99,7 @@ git clone YOUR_REPO_URL .
 
 # Option B: If not using Git, use SCP from your local machine
 # (run this from your LOCAL machine, not the server)
-# scp -i your-key.pem -r .\* ubuntu@YOUR_EC2_PUBLIC_IP:/opt/npfl/
+# scp -i your-key.pem -r .\* ubuntu@YOUR_EC2_PUBLIC_IP:/opt/npfl/NPFL-MIAS/
 ```
 
 > If you don't have a Git repo, use Option B. Copy everything **except** `myenv/`, `db.sqlite3`, and `.env`.
@@ -107,7 +107,7 @@ git clone YOUR_REPO_URL .
 ### 3.3 Create Python Virtual Environment
 
 ```bash
-cd /opt/npfl
+cd /opt/npfl/NPFL-MIAS
 python3 -m venv venv
 source venv/bin/activate
 ```
@@ -123,7 +123,7 @@ pip install gunicorn
 ### 3.5 Create the `.env` File
 
 ```bash
-cat > /opt/npfl/.env << 'EOF'
+cat > /opt/npfl/NPFL-MIAS/.env << 'EOF'
 # Database
 DB_NAME=tope_npfl
 DB_USER=npfl_user
@@ -158,7 +158,7 @@ python3 -c "from django.core.management.utils import get_random_secret_key; prin
 ### 3.6 Run Migrations
 
 ```bash
-cd /opt/npfl
+cd /opt/npfl/NPFL-MIAS
 source venv/bin/activate
 python manage.py migrate
 ```
@@ -180,7 +180,7 @@ python manage.py collectstatic --noinput
 
 ```bash
 # Copy the Excel file to the server first (from local machine):
-# scp -i your-key.pem "plans/NPFL ALL-TIME DATABASE.xlsx" ubuntu@YOUR_EC2_PUBLIC_IP:/opt/npfl/plans/
+# scp -i your-key.pem "plans/NPFL ALL-TIME DATABASE.xlsx" ubuntu@YOUR_EC2_PUBLIC_IP:/opt/npfl/NPFL-MIAS/plans/
 
 # Then import:
 python manage.py import_npfl_excel
@@ -189,11 +189,11 @@ python manage.py import_npfl_excel
 ### 3.10 Test with Gunicorn
 
 ```bash
-cd /opt/npfl
-gunicorn --bind 0.0.0.0:8000 npfl_project.wsgi:application
+cd /opt/npfl/NPFL-MIAS
+gunicorn --bind 0.0.0.0:8001 npfl_project.wsgi:application
 ```
 
-> Visit `http://YOUR_EC2_PUBLIC_IP:8000` — if you see the app, Gunicorn works.
+> Visit `http://YOUR_EC2_PUBLIC_IP:8001` — if you see the app, Gunicorn works.
 > Press `Ctrl+C` to stop.
 
 ---
@@ -211,13 +211,13 @@ After=network.target mysql.service
 [Service]
 User=ubuntu
 Group=ubuntu
-WorkingDirectory=/opt/npfl
-EnvironmentFile=/opt/npfl/.env
-ExecStart=/opt/npfl/venv/bin/gunicorn \
+WorkingDirectory=/opt/npfl/NPFL-MIAS
+EnvironmentFile=/opt/npfl/NPFL-MIAS/.env
+ExecStart=/opt/npfl/NPFL-MIAS/venv/bin/gunicorn \
     --access-logfile /var/log/npfl/access.log \
     --error-logfile /var/log/npfl/error.log \
     --workers 3 \
-    --bind 127.0.0.1:8000 \
+    --bind 127.0.0.1:8001 \
     npfl_project.wsgi:application
 Restart=always
 RestartSec=3
@@ -257,20 +257,20 @@ server {
 
     # Static files (CSS, JS, logos)
     location /static/ {
-        alias /opt/npfl/staticfiles/;
+        alias /opt/npfl/NPFL-MIAS/staticfiles/;
         expires 30d;
         add_header Cache-Control "public, immutable";
     }
 
     # Logo files
     location /logos/ {
-        alias /opt/npfl/logos/;
+        alias /opt/npfl/NPFL-MIAS/logos/;
         expires 30d;
     }
 
     # Proxy to Gunicorn
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:8001;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -345,10 +345,10 @@ sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 | Nginx error log | `tail -f /var/log/nginx/error.log` |
 | Restart Nginx | `sudo systemctl restart nginx` |
 | Test Nginx config | `sudo nginx -t` |
-| Run migrations | `cd /opt/npfl && source venv/bin/activate && python manage.py migrate` |
-| Generate predictions | `cd /opt/npfl && source venv/bin/activate && python manage.py generate_predictions` |
-| Import Excel data | `cd /opt/npfl && source venv/bin/activate && python manage.py import_npfl_excel` |
-| Django shell | `cd /opt/npfl && source venv/bin/activate && python manage.py shell` |
+| Run migrations | `cd /opt/npfl/NPFL-MIAS && source venv/bin/activate && python manage.py migrate` |
+| Generate predictions | `cd /opt/npfl/NPFL-MIAS && source venv/bin/activate && python manage.py generate_predictions` |
+| Import Excel data | `cd /opt/npfl/NPFL-MIAS && source venv/bin/activate && python manage.py import_npfl_excel` |
+| Django shell | `cd /opt/npfl/NPFL-MIAS && source venv/bin/activate && python manage.py shell` |
 
 ---
 
@@ -357,7 +357,7 @@ sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
 - [ ] EC2 instance launched with correct security group
 - [ ] SSH access working
 - [ ] MySQL installed, database and user created
-- [ ] Code deployed to `/opt/npfl`
+- [ ] Code deployed to `/opt/npfl/NPFL-MIAS`
 - [ ] `.env` file configured with production values
 - [ ] `DEBUG=False` in `.env`
 - [ ] `SECRET_KEY` changed to a random string

@@ -15,6 +15,7 @@ from dashboard.utils import get_npfl_data, perform_comparison, generate_expert_r
 from dashboard.views import NPFL_CLUBS_2026_2027, canonical_team_pair
 from supercomputer.models import SeasonFixture, Prediction, MatchAnalysisReport
 from supercomputer.predictor import predict_all_fixtures
+from supercomputer.standings import calculate_standings
 
 
 SEASON = '26/27'
@@ -562,4 +563,17 @@ def report_generate(request, fixture_id):
         'report': obj.report,
         'ai_generated': obj.ai_generated,
         'status': 'ai',
+    })
+
+
+# ---------------------------------------------------------------------------
+# Standings
+# ---------------------------------------------------------------------------
+
+@login_required
+def standings(request):
+    """Predicted league standings."""
+    standings_data = calculate_standings(SEASON)
+    return render(request, 'admin_panel/standings.html', {
+        'standings': standings_data,
     })

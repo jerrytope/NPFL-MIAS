@@ -8,6 +8,7 @@ from django.db.models import Prefetch
 from dashboard.utils import get_npfl_data
 from supercomputer.models import SeasonFixture, Prediction
 from supercomputer.predictor import predict_all_fixtures
+from supercomputer.standings import calculate_standings
 
 
 def index(request):
@@ -81,3 +82,11 @@ def models_Q_home_or_away(team):
     """Return a Q object that matches fixtures where team is home or away."""
     from django.db.models import Q
     return Q(fixture__home__name=team) | Q(fixture__away__name=team)
+
+
+def standings(request):
+    """Render the predicted league standings page."""
+    standings_data = calculate_standings()
+    return render(request, 'supercomputer/standings.html', {
+        'standings': standings_data,
+    })

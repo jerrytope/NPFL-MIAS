@@ -1,0 +1,199 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NPFL Super Computer — Predicted Standings</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Orbitron:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'supercomputer/style.css' %}">
+
+    <style>
+        .standings-card {
+            background: rgba(17, 24, 39, 0.85);
+            border: 1px solid rgba(255,255,255,0.06);
+            border-radius: 16px;
+            overflow: hidden;
+            backdrop-filter: blur(12px);
+            margin-top: 24px;
+        }
+        .standings-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .standings-table thead th {
+            padding: 14px 16px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: #94a3b8;
+            background: rgba(255,255,255,0.03);
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .standings-table thead th:nth-child(2) {
+            text-align: left;
+        }
+        .standings-table tbody td {
+            padding: 12px 16px;
+            font-size: 14px;
+            color: #e2e8f0;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+        }
+        .standings-table tbody td:nth-child(2) {
+            text-align: left;
+            font-weight: 600;
+        }
+        .standings-table tbody tr:hover {
+            background: rgba(56, 189, 248, 0.05);
+        }
+        .standings-table tbody tr:last-child td {
+            border-bottom: none;
+        }
+        .pos-cell {
+            font-weight: 700;
+            font-family: 'Orbitron', monospace;
+            width: 50px;
+        }
+        .pos-1, .pos-2, .pos-3 {
+            color: #38bdf8;
+        }
+        .pts-cell {
+            font-weight: 800;
+            font-family: 'Orbitron', monospace;
+            font-size: 16px;
+            color: #38bdf8;
+        }
+        .standings-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 32px;
+        }
+        .standings-header h2 {
+            font-size: 20px;
+            font-weight: 700;
+            color: #f1f5f9;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .standings-header h2 i {
+            color: #38bdf8;
+        }
+        .back-to-predictions {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 8px 14px;
+            border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: all 0.2s;
+        }
+        .back-to-predictions:hover {
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+        .zone-legend {
+            display: flex;
+            gap: 20px;
+            margin-top: 16px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+        .zone-legend span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .zone-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .zone-dot.champion { background: #38bdf8; }
+        .zone-dot.relegation { background: #f87171; }
+    </style>
+</head>
+<body>
+    <div class="bg-grid"></div>
+
+    <div class="app-container">
+        <!-- Header -->
+        <header class="sc-header">
+            <div class="header-inner">
+                <div class="header-left">
+                    <a href="/supercomputer/" class="back-link" title="Back to Predictions">
+                        <i class="fas fa-arrow-left"></i>
+                    </a>
+                    <div class="title-block">
+                        <h1 class="sc-title">
+                            <i class="fas fa-trophy"></i>
+                            Predicted Standings
+                        </h1>
+                        <p class="sc-subtitle">Based on AI predictions — 2026/27 Season</p>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Standings Info -->
+        <div class="standings-header">
+            <h2><i class="fas fa-table-list"></i> League Table</h2>
+        </div>
+
+        <div class="zone-legend">
+            <span><span class="zone-dot champion"></span> Top 3 (Champions zone)</span>
+            <span><span class="zone-dot relegation"></span> Bottom 3 (Relegation zone)</span>
+        </div>
+
+        {% if standings %}
+        <div class="standings-card">
+            <table class="standings-table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Team</th>
+                        <th>P</th>
+                        <th>W</th>
+                        <th>D</th>
+                        <th>L</th>
+                        <th>Pts</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in standings %}
+                    <tr>
+                        <td class="pos-cell {% if row.position <= 3 %}pos-1{% elif row.position > 14 %}pos-relegation{% endif %}">{{ row.position }}</td>
+                        <td>{{ row.team }}</td>
+                        <td>{{ row.played }}</td>
+                        <td>{{ row.won }}</td>
+                        <td>{{ row.drawn }}</td>
+                        <td>{{ row.lost }}</td>
+                        <td class="pts-cell">{{ row.points }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <div class="empty-state" style="margin-top:40px;">
+            <i class="fas fa-trophy"></i>
+            <h3>No predictions yet</h3>
+            <p>Generate predictions first to see the standings.</p>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>

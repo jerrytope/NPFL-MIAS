@@ -37,6 +37,10 @@
                     <i class="fas fa-file-lines"></i>
                     <span>Reports</span>
                 </a>
+                <a href="{% url 'admin_panel:standings' %}" class="nav-link {% block nav_standings %}{% endblock %}">
+                    <i class="fas fa-trophy"></i>
+                    <span>Standings</span>
+                </a>
                 <div class="nav-divider"></div>
                 <a href="/" class="nav-link" title="Back to public dashboard">
                     <i class="fas fa-arrow-left"></i>

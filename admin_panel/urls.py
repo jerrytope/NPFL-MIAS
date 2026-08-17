@@ -12,6 +12,7 @@ urlpatterns = [
     path('fixtures/preview/', views.preview_fixtures, name='preview_fixtures'),
     path('fixtures/confirm/', views.confirm_import, name='confirm_import'),
     path('reports/', views.reports, name='reports'),
+    path('standings/', views.standings, name='standings'),
     path('api/reports/<int:fixture_id>/', views.report_update, name='report_update'),
     path('api/reports/<int:fixture_id>/generate/', views.report_generate, name='report_generate'),
 ]
