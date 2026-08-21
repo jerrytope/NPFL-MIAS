@@ -69,6 +69,8 @@ def predictions_api(request):
             'h2h_away_rate': p.h2h_away_rate,
             'home_venue_strength': p.home_venue_strength,
             'away_venue_strength': p.away_venue_strength,
+            'home_transfer_score': p.home_transfer_score,
+            'away_transfer_score': p.away_transfer_score,
             'manually_edited': p.manually_edited,
         })
 

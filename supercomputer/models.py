@@ -35,6 +35,8 @@ class Prediction(models.Model):
     h2h_draw_rate = models.FloatField(default=0)
     home_venue_strength = models.FloatField(default=0)
     away_venue_strength = models.FloatField(default=0)
+    home_transfer_score = models.FloatField(default=0)
+    away_transfer_score = models.FloatField(default=0)
     manually_edited = models.BooleanField(default=False)
 
     def __str__(self):

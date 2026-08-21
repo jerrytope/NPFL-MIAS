@@ -278,6 +278,10 @@ function createPredictionCard(p) {
                 <div class="breakdown-label">Venue</div>
                 <div class="breakdown-value">${(p.home_venue_strength * 100).toFixed(0)}% / ${(p.away_venue_strength * 100).toFixed(0)}%</div>
             </div>
+            <div class="breakdown-item">
+                <div class="breakdown-label">Transfer</div>
+                <div class="breakdown-value">${(p.home_transfer_score || 0).toFixed(1)} / ${(p.away_transfer_score || 0).toFixed(1)}</div>
+            </div>
         </div>
     `;
 

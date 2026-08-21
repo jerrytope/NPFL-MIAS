@@ -83,6 +83,8 @@ class Command(BaseCommand):
                         'h2h_away_rate': r['h2h_away_rate'],
                         'home_venue_strength': r['home_venue_strength'],
                         'away_venue_strength': r['away_venue_strength'],
+                        'home_transfer_score': r.get('home_transfer_score', 0),
+                        'away_transfer_score': r.get('away_transfer_score', 0),
                     },
                 )
                 if was_created:

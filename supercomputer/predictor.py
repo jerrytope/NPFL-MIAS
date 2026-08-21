@@ -2,24 +2,29 @@
 NPFL Super Computer — Prediction Engine
 
 Computes win/draw/loss probabilities for each fixture using a weighted algorithm:
-- 35% Recent Form (last 5 games, with 1.3x away win multiplier)
-- 25% Head-to-Head Record
-- 25% Home/Away Venue Strength
+- 25% Recent Form (last 5 games, with 1.3x away win multiplier)
+- 20% Head-to-Head Record
+- 20% Home/Away Venue Strength
 - 15% Goal-Scoring Form
+- 20% Transfer Window & Squad Strength (from npfl_2026-27_transfer_metrics)
 """
 
+import os
+from pathlib import Path
 import pandas as pd
 import numpy as np
+from django.conf import settings
 
 
 # ---------------------------------------------------------------------------
-# Constants
+# Constants & Weights
 # ---------------------------------------------------------------------------
 
-WEIGHT_FORM = 0.35
-WEIGHT_H2H = 0.25
-WEIGHT_VENUE = 0.25
+WEIGHT_FORM = 0.25
+WEIGHT_H2H = 0.20
+WEIGHT_VENUE = 0.20
 WEIGHT_GOALS = 0.15
+WEIGHT_TRANSFER = 0.20
 
 AWAY_WIN_MULTIPLIER = 1.3
 HOME_WIN_MULTIPLIER = 1.0
@@ -31,6 +36,83 @@ MAX_FORM_SCORE = 5 * 3 * AWAY_WIN_MULTIPLIER
 DEFAULT_H2H_HOME_RATE = 0.40
 DEFAULT_H2H_DRAW_RATE = 0.25
 DEFAULT_H2H_AWAY_RATE = 0.35
+
+# Fallback transfer metrics dictionary for the 2026/27 season (score out of 10.0)
+DEFAULT_TRANSFER_METRICS = {
+    'Rivers United': 9.5,
+    'Shooting Stars': 9.0,
+    'Rangers International': 7.0,
+    'Bendel Insurance': 6.0,
+    'Ikorodu City': 6.0,
+    'Kano Pillars': 6.0,
+    'Sporting Lagos': 6.0,
+    'Barau': 5.0,
+    'Kwara United': 5.0,
+    'Enyimba': 4.5,
+    'Niger Tornadoes': 4.5,
+    'Plateau United': 4.0,
+    'Kun Khalifat': 4.0,
+    'Ranchers Bees': 4.0,
+    'Nasarawa United': 4.0,
+    'Abia Warriors': 4.0,
+    'Inter Lagos': 4.0,
+    'Katsina United': 4.0,
+    'Doma United': 4.0,
+    'Warri Wolves': 3.0,
+}
+
+_TRANSFER_CACHE = None
+
+
+def get_all_transfer_metrics():
+    """
+    Load transfer metrics dictionary {team_name: float_metric} from plans file if present,
+    falling back to DEFAULT_TRANSFER_METRICS.
+    """
+    global _TRANSFER_CACHE
+    if _TRANSFER_CACHE is not None:
+        return _TRANSFER_CACHE
+
+    metrics = dict(DEFAULT_TRANSFER_METRICS)
+
+    # Attempt to load from plans folder
+    base_dir = getattr(settings, 'BASE_DIR', Path(__file__).resolve().parent.parent)
+    csv_path = Path(base_dir) / 'plans' / 'npfl_2026-27_transfer_metrics.csv'
+    xltx_path = Path(base_dir) / 'plans' / 'npfl_2026-27_transfer_metrics.xltx'
+
+    target_file = None
+    if csv_path.exists():
+        target_file = csv_path
+    elif xltx_path.exists():
+        target_file = xltx_path
+
+    if target_file:
+        try:
+            if str(target_file).endswith('.csv'):
+                df = pd.read_csv(target_file)
+            else:
+                df = pd.read_excel(target_file)
+            if 'team' in df.columns and 'metric' in df.columns:
+                for _, row in df.iterrows():
+                    team = str(row['team']).strip()
+                    try:
+                        metrics[team] = float(row['metric'])
+                    except (ValueError, TypeError):
+                        pass
+        except Exception:
+            pass
+
+    _TRANSFER_CACHE = metrics
+    return _TRANSFER_CACHE
+
+
+def get_team_transfer_rating(team_name):
+    """
+    Get raw transfer rating (e.g. 9.5, 4.0) for a team.
+    Defaults to 5.0 (league average) if unknown.
+    """
+    metrics = get_all_transfer_metrics()
+    return metrics.get(team_name, 5.0)
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +289,24 @@ def predict_match(home_team, away_team, df):
         goals_draw /= goals_total
         goals_away /= goals_total
 
-    # 5. Combine & Normalise
+    # 5. Transfer Window & Squad Strength (20%)
+    t_home_raw = get_team_transfer_rating(home_team)
+    t_away_raw = get_team_transfer_rating(away_team)
+
+    # Normalize 0-10 metric to 0.0-1.0
+    t_home_norm = t_home_raw / 10.0
+    t_away_norm = t_away_raw / 10.0
+
+    t_diff = t_home_norm - t_away_norm
+    transfer_h = (1 + t_diff) / 2
+    transfer_a = (1 - t_diff) / 2
+    transfer_d = 1 - abs(t_diff)
+    transfer_total = transfer_h + transfer_d + transfer_a
+    transfer_h /= transfer_total
+    transfer_d /= transfer_total
+    transfer_a /= transfer_total
+
+    # 6. Combine & Normalise
     # Form factor: convert form difference to home/draw/away
     form_diff = form_home - form_away
     form_h = (1 + form_diff) / 2  # 0-1 scale
@@ -221,17 +320,20 @@ def predict_match(home_team, away_team, df):
     raw_home = (WEIGHT_FORM * form_h +
                 WEIGHT_H2H * h2h_home_rate +
                 WEIGHT_VENUE * venue_home +
-                WEIGHT_GOALS * goals_home)
+                WEIGHT_GOALS * goals_home +
+                WEIGHT_TRANSFER * transfer_h)
 
     raw_away = (WEIGHT_FORM * form_a +
                 WEIGHT_H2H * h2h_away_rate +
                 WEIGHT_VENUE * venue_away +
-                WEIGHT_GOALS * goals_away)
+                WEIGHT_GOALS * goals_away +
+                WEIGHT_TRANSFER * transfer_a)
 
     raw_draw = (WEIGHT_FORM * form_d +
                 WEIGHT_H2H * h2h_draw_rate +
                 WEIGHT_VENUE * (1 - max(venue_home, venue_away)) +
-                WEIGHT_GOALS * goals_draw)
+                WEIGHT_GOALS * goals_draw +
+                WEIGHT_TRANSFER * transfer_d)
 
     # Normalise to 100%
     total = raw_home + raw_draw + raw_away
@@ -273,6 +375,8 @@ def predict_match(home_team, away_team, df):
         'h2h_away_rate': round(h2h_away_rate, 4),
         'home_venue_strength': round(venue_home, 4),
         'away_venue_strength': round(venue_away, 4),
+        'home_transfer_score': round(t_home_raw, 1),
+        'away_transfer_score': round(t_away_raw, 1),
     }
 
 
