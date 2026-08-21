@@ -572,8 +572,25 @@ def report_generate(request, fixture_id):
 
 @login_required
 def standings(request):
-    """Predicted league standings."""
-    standings_data = calculate_standings(SEASON)
+    """Predicted league standings with optional match day filter."""
+    max_md = request.GET.get('match_day')
+    max_match_day = None
+    if max_md:
+        try:
+            max_match_day = int(max_md)
+        except ValueError:
+            pass
+
+    all_match_days = list(
+        SeasonFixture.objects.filter(season=SEASON)
+        .values_list('match_day', flat=True)
+        .distinct()
+        .order_by('match_day')
+    )
+
+    standings_data = calculate_standings(SEASON, max_match_day=max_match_day)
     return render(request, 'admin_panel/standings.html', {
         'standings': standings_data,
+        'all_match_days': all_match_days,
+        'selected_md': max_match_day,
     })

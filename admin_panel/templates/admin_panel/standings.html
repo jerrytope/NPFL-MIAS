@@ -12,6 +12,24 @@
     <h3><i class="fas fa-trophy" style="color:var(--color-primary); margin-right:8px;"></i> Predicted League Table — 2026/27</h3>
 </div>
 
+<!-- Match Day Filter -->
+<div style="display:flex; align-items:center; gap:12px; margin:16px 0; padding:12px 16px; background:var(--color-card); border:1px solid var(--color-border); border-radius:10px;">
+    <label for="mdSelect" style="font-size:13px; font-weight:600; color:var(--color-text-muted); white-space:nowrap;">
+        <i class="fas fa-calendar-alt"></i> Show standings after:
+    </label>
+    <select id="mdSelect" onchange="if(this.value){window.location.href='?match_day='+this.value}else{window.location.href='?'}" style="padding:8px 12px; border-radius:8px; border:1px solid var(--color-border); background:rgba(255,255,255,0.04); color:var(--color-text); font-size:13px; font-family:var(--font); outline:none; cursor:pointer; min-width:200px;">
+        <option value="" {% if not selected_md %}selected{% endif %}>All Match Days (Full Season)</option>
+        {% for md in all_match_days %}
+        <option value="{{ md }}" {% if selected_md == md %}selected{% endif %}>Match Day {{ md }}</option>
+        {% endfor %}
+    </select>
+    {% if selected_md %}
+    <span style="display:inline-flex; align-items:center; gap:4px; padding:4px 10px; border-radius:6px; background:rgba(56,189,248,0.1); color:var(--color-primary); font-size:12px; font-weight:600;">
+        <i class="fas fa-filter"></i> MD 1–{{ selected_md }}
+    </span>
+    {% endif %}
+</div>
+
 <div style="margin-top:8px; display:flex; gap:20px; font-size:12px; color:var(--color-text-muted); margin-bottom:16px;">
     <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--color-primary); margin-right:4px;"></span> Top 3</span>
     <span><span style="display:inline-block; width:10px; height:10px; border-radius:50%; background:var(--color-danger); margin-right:4px;"></span> Relegation zone</span>

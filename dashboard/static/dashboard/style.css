@@ -4,23 +4,23 @@
 
 /* Design Tokens & Custom Properties */
 :root {
-    --bg-main: #0a0e1a;
-    --bg-card: rgba(17, 24, 39, 0.6);
-    --bg-card-hover: rgba(31, 41, 55, 0.7);
-    --border-color: rgba(255, 255, 255, 0.08);
-    --text-primary: #f3f4f6;
-    --text-secondary: #9ca3af;
-    --text-muted: #6b7280;
+    --bg-main: #ffffff;
+    --bg-card: rgba(248, 249, 252, 0.98);
+    --bg-card-hover: rgba(241, 245, 249, 0.98);
+    --border-color: rgba(0, 0, 0, 0.08);
+    --text-primary: #111827;
+    --text-secondary: #4b5563;
+    --text-muted: #9ca3af;
     
-    /* Neon Theme Colors */
-    --primary: #38bdf8;          /* Light Blue */
-    --primary-glow: rgba(56, 189, 248, 0.15);
+    /* Accent Colors */
+    --primary: #0ea5e9;          /* Sky Blue — legible on white */
+    --primary-glow: rgba(14, 165, 233, 0.15);
     --accent-red: #f43f5e;        /* Team 1 Rose */
-    --accent-red-glow: rgba(244, 63, 94, 0.15);
+    --accent-red-glow: rgba(244, 63, 94, 0.12);
     --accent-blue: #0078d4;       /* Team 2 Blue */
-    --accent-blue-glow: rgba(0, 120, 212, 0.15);
-    --accent-yellow: #fbbf24;     /* Draws Yellow */
-    --accent-green: #10b981;      /* Win Green */
+    --accent-blue-glow: rgba(0, 120, 212, 0.12);
+    --accent-yellow: #d97706;     /* Draws Amber — deeper for white bg */
+    --accent-green: #059669;      /* Win Green — deeper for white bg */
     
     /* Font Stack */
     --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
@@ -37,8 +37,8 @@
 body {
     background-color: var(--bg-main);
     background-image: 
-        radial-gradient(at 10% 20%, rgba(56, 189, 248, 0.05) 0px, transparent 50%),
-        radial-gradient(at 90% 80%, rgba(244, 63, 94, 0.03) 0px, transparent 50%);
+        radial-gradient(at 10% 20%, rgba(14, 165, 233, 0.04) 0px, transparent 50%),
+        radial-gradient(at 90% 80%, rgba(244, 63, 94, 0.02) 0px, transparent 50%);
     background-attachment: fixed;
     color: var(--text-primary);
     font-family: var(--font-sans);
@@ -81,7 +81,7 @@ body {
     font-size: 1.75rem;
     font-weight: 800;
     letter-spacing: -0.025em;
-    background: linear-gradient(to right, #ffffff, #9ca3af);
+    background: linear-gradient(to right, #111827, #4b5563);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -103,7 +103,7 @@ body {
     gap: 0.5rem;
     font-size: 0.875rem;
     color: var(--text-secondary);
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(0, 0, 0, 0.04);
     padding: 0.5rem 0.875rem;
     border-radius: 9999px;
     border: 1px solid var(--border-color);
@@ -194,20 +194,21 @@ body {
     border: 1px solid var(--border-color);
     border-radius: 14px;
     padding: 1.5rem;
-    box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
 }
 
 .card:hover {
-    border-color: rgba(255, 255, 255, 0.12);
+    border-color: rgba(0, 0, 0, 0.12);
 }
 
 /* Controls card styling */
 .controls-card {
     padding: 2rem;
-    border-bottom: 2px solid rgba(56, 189, 248, 0.1);
+    border-bottom: 2px solid rgba(14, 165, 233, 0.1);
+    overflow: visible; /* Allow custom dropdown list to layer above other content */
 }
 
 .controls-layout {
@@ -241,9 +242,9 @@ body {
 }
 
 .form-select {
-    background-color: rgba(17, 24, 39, 0.8);
+    background-color: #ffffff;
     color: var(--text-primary);
-    border: 1px solid var(--border-color);
+    border: 1px solid rgba(0, 0, 0, 0.14);
     padding: 0.875rem 1rem;
     border-radius: 8px;
     font-size: 1rem;
@@ -265,7 +266,7 @@ body {
     align-items: center;
     width: 48px;
     height: 48px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(0, 0, 0, 0.04);
     border: 1px solid var(--border-color);
     border-radius: 50%;
     margin-top: 1.5rem;
@@ -428,7 +429,7 @@ body {
     height: 60px;
     border-radius: 50%;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(0, 0, 0, 0.04);
     border: 2px solid var(--border-color);
     display: flex;
     justify-content: center;
@@ -571,7 +572,7 @@ body {
 
 .avg-progress-bar-container {
     height: 32px;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.05);
     border: 1px solid var(--border-color);
     border-radius: 6px;
     position: relative;
@@ -586,7 +587,7 @@ body {
     font-family: var(--font-display);
     font-size: 0.9375rem;
     font-weight: 700;
-    color: #ffffff;
+    color: #111827;
     z-index: 2;
 }
 
@@ -611,8 +612,8 @@ body {
 .report-card {
     padding: 1.5rem;
     border-radius: 14px;
-    background-color: rgba(17, 24, 39, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background-color: rgba(248, 249, 252, 0.98);
+    border: 1px solid rgba(0, 0, 0, 0.08);
     margin-bottom: 1.5rem;
 }
 
@@ -649,47 +650,7 @@ body {
     margin-bottom: 1rem;
 }
 
-/* Report card styles */
-.report-card {
-    padding: 1.5rem;
-    border-radius: 14px;
-    background-color: rgba(17, 24, 39, 0.75);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    margin-bottom: 1.5rem;
-}
-
-.report-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 1rem;
-    margin-bottom: 1rem;
-}
-
-.report-header h3 {
-    font-family: var(--font-display);
-    font-size: 1.1rem;
-    font-weight: 700;
-}
-
-.report-status {
-    color: var(--text-secondary);
-    font-size: 0.9rem;
-}
-
-.report-body {
-    min-height: 120px;
-    color: var(--text-primary);
-    line-height: 1.75;
-}
-
-.report-placeholder {
-    color: var(--text-secondary);
-}
-
-.report-text p {
-    margin-bottom: 1rem;
-}
+/* Remove duplicate report-card block that was left in original */
 
 /* Visualization charts grid */
 .charts-grid {
@@ -810,7 +771,7 @@ body {
 .search-box {
     display: flex;
     align-items: center;
-    background: rgba(0, 0, 0, 0.2);
+    background: #f9fafb;
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 0.5rem 0.875rem;
@@ -843,12 +804,145 @@ body {
     color: var(--text-muted);
 }
 
+/* =============================================
+   Custom Logo Dropdown
+   ============================================= */
+.custom-select-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.custom-select-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    transition: border-color 0.2s, box-shadow 0.2s;
+    text-align: left;
+}
+
+.custom-select-btn:hover {
+    border-color: var(--primary);
+}
+
+.custom-select-btn:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-glow);
+}
+
+.custom-select-btn-content {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    flex: 1;
+    min-width: 0;
+}
+
+.custom-select-placeholder {
+    color: var(--text-muted);
+    font-size: 1rem;
+}
+
+.custom-select-chevron {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    flex-shrink: 0;
+    transition: transform 0.2s;
+}
+
+/* Dropdown list panel */
+.custom-select-dropdown {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: #ffffff;
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    list-style: none;
+    max-height: 280px;
+    overflow-y: auto;
+    z-index: 999;
+    padding: 0.375rem;
+}
+
+.custom-select-dropdown.open {
+    display: block;
+    animation: fadeIn 0.15s ease-out;
+}
+
+/* Each option row */
+.custom-select-option {
+    display: flex;
+    align-items: center;
+    gap: 0.625rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 7px;
+    cursor: pointer;
+    transition: background 0.15s;
+    font-size: 0.9375rem;
+    color: var(--text-primary);
+}
+
+.custom-select-option:hover {
+    background: rgba(14, 165, 233, 0.07);
+}
+
+.custom-select-option.selected {
+    background: rgba(14, 165, 233, 0.1);
+    color: var(--primary);
+    font-weight: 600;
+}
+
+/* Logo image inside dropdown */
+.custom-select-option-logo {
+    width: 26px;
+    height: 26px;
+    object-fit: contain;
+    border-radius: 4px;
+    flex-shrink: 0;
+}
+
+/* Initials badge inside dropdown (fallback) */
+.custom-select-initials-badge {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--font-display);
+    font-size: 0.625rem;
+    font-weight: 700;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+
+.custom-select-option-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* Standard Data Tables */
 .table-wrapper {
     overflow-x: auto;
     border: 1px solid var(--border-color);
     border-radius: 8px;
-    background: rgba(17, 24, 39, 0.3);
+    background: rgba(0, 0, 0, 0.02);
 }
 
 .table-standard {
@@ -859,7 +953,7 @@ body {
 }
 
 .table-standard th {
-    background-color: rgba(255, 255, 255, 0.02);
+    background-color: rgba(0, 0, 0, 0.03);
     color: var(--text-secondary);
     font-weight: 600;
     padding: 0.875rem 1.25rem;
@@ -868,7 +962,7 @@ body {
 
 .table-standard td {
     padding: 0.875rem 1.25rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
     color: var(--text-primary);
 }
 
@@ -877,7 +971,7 @@ body {
 }
 
 .table-standard tr:hover td {
-    background-color: rgba(255, 255, 255, 0.01);
+    background-color: rgba(0, 0, 0, 0.02);
 }
 
 /* Responsiveness */

@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const reportContent = document.getElementById('reportContent');
     const syncStatus = document.getElementById('syncStatus');
     const rawMatchSearch = document.getElementById('rawMatchSearch');
-    
+
     // Tab Elements
     const tabButtons = document.querySelectorAll('.tab-btn');
     const tabPanes = document.querySelectorAll('.tab-pane');
@@ -28,18 +28,33 @@ document.addEventListener('DOMContentLoaded', () => {
     let goalsChartInstance = null;
     let seasonsChartInstance = null;
 
-    // Mapping team names to existing image files in the logos folder
-    // Note: We use lowercase keys for easy matching
+    // Mapping team names to real logo files in the /logos/ static directory.
+    // Only clubs that have an actual .webp logo file are listed here.
+    // All other clubs fall back to the styled initials badge.
     const teamLogoMapping = {
-        'enyimba': '1.png',
-        'kano pillars': '2.png',
-        'bendel insurance': '3.png',
-        'sunshine stars': '4.png',
-        'jigawa golden stars': '3.png',
-        'wikki tourists': '4.png',
-        'kwara united': '2.png',
-        'julius berger': '1.png',
-        'plateau united': '2.png'
+        'abia warriors': 'abia warriors.webp',
+        'rangers international': 'rangers international.webp',
+        'shooting stars': 'shooting stars.webp',
+        'rangers international': 'rangers international.webp',
+        'barau': 'barau.webp',
+        'bendel insurance': 'bendel insurance.webp',
+        'doma united': 'doma united.webp',
+        'enugu rangers': 'enugu rangers.webp',
+        'inter lagos': 'inter lagos.webp',
+        'kano pillars': 'kano pillars.webp',
+        'katsina united': 'katsina united.webp',
+        'kun khalifat': 'kun khalifat.webp',
+        'kwara united': 'kwara united.webp',
+        'nasarawa united': 'nasarawa united.webp',
+        'niger tornadoes': 'niger tornadoes.webp',
+        'plateau united': 'plateau united.webp',
+        'ranchers bees': 'ranchers bees.webp',
+        'rivers united': 'rivers united.webp',
+        'shooting stars': 'shooting stars.webp',
+        'sporting lagos': 'sporting lagos.webp',
+        'warri wolves': 'warri wolves.webp',
+        'ikorodu city': 'ikorodu city.webp',
+
     };
 
     // Helper to get team initials for placeholder avatar
@@ -67,16 +82,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderTeamAvatar(container, teamName) {
         container.innerHTML = '';
         const nameLower = teamName.trim().toLowerCase();
-        
+
         if (teamLogoMapping[nameLower]) {
-            // Logo exists in directory
+            // Real logo file exists
             const img = document.createElement('img');
             img.src = `${logoBaseUrl}${teamLogoMapping[nameLower]}`;
             img.alt = `${teamName} Logo`;
             img.className = 'team-logo-img';
             container.appendChild(img);
         } else {
-            // Render beautiful initials placeholder with name-derived gradient
+            // Render styled initials badge with a name-derived gradient
             const badge = document.createElement('div');
             badge.className = 'team-initials-badge';
             badge.style.background = getTeamGradient(teamName);
@@ -85,12 +100,152 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Build a small logo element for use inside the custom dropdown
+    function buildDropdownLogoEl(teamName) {
+        const nameLower = teamName.trim().toLowerCase();
+        if (teamLogoMapping[nameLower]) {
+            const img = document.createElement('img');
+            img.src = `${logoBaseUrl}${teamLogoMapping[nameLower]}`;
+            img.alt = teamName;
+            img.className = 'custom-select-option-logo';
+            return img;
+        } else {
+            const badge = document.createElement('span');
+            badge.className = 'custom-select-initials-badge';
+            badge.style.background = getTeamGradient(teamName);
+            badge.textContent = getTeamInitials(teamName);
+            return badge;
+        }
+    }
+
+    // Build a custom logo-aware dropdown that syncs to a hidden native <select>.
+    // The list panel is appended to <body> with position:fixed so it always
+    // layers above all other page content regardless of stacking contexts.
+    function buildCustomDropdown(nativeSelect) {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'custom-select-wrapper';
+
+        // Button face
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'custom-select-btn';
+        btn.setAttribute('aria-haspopup', 'listbox');
+
+        const btnContent = document.createElement('span');
+        btnContent.className = 'custom-select-btn-content';
+        btnContent.innerHTML = `<span class="custom-select-placeholder">${nativeSelect.options[0].text}</span>`;
+
+        const chevron = document.createElement('i');
+        chevron.className = 'fa-solid fa-chevron-down custom-select-chevron';
+
+        btn.appendChild(btnContent);
+        btn.appendChild(chevron);
+
+        // Dropdown list — attached to <body> so it escapes all stacking contexts
+        const dropdown = document.createElement('ul');
+        dropdown.className = 'custom-select-dropdown';
+        dropdown.setAttribute('role', 'listbox');
+        document.body.appendChild(dropdown);
+
+        // Position the floating list below the button
+        function positionDropdown() {
+            const rect = btn.getBoundingClientRect();
+            dropdown.style.position = 'fixed';
+            dropdown.style.top = (rect.bottom + 6) + 'px';
+            dropdown.style.left = rect.left + 'px';
+            dropdown.style.width = rect.width + 'px';
+        }
+
+        // Populate options (skip the first disabled placeholder)
+        Array.from(nativeSelect.options).forEach((opt) => {
+            if (opt.disabled) return;
+            const li = document.createElement('li');
+            li.className = 'custom-select-option';
+            li.setAttribute('data-value', opt.value);
+            li.setAttribute('role', 'option');
+            li.appendChild(buildDropdownLogoEl(opt.value));
+            const label = document.createElement('span');
+            label.className = 'custom-select-option-label';
+            label.textContent = opt.text;
+            li.appendChild(label);
+
+            li.addEventListener('click', (e) => {
+                e.stopPropagation();
+                // Update button face
+                btnContent.innerHTML = '';
+                btnContent.appendChild(buildDropdownLogoEl(opt.value));
+                const lbl = document.createElement('span');
+                lbl.className = 'custom-select-option-label';
+                lbl.textContent = opt.text;
+                btnContent.appendChild(lbl);
+
+                // Mark selected
+                dropdown.querySelectorAll('.custom-select-option').forEach(el => el.classList.remove('selected'));
+                li.classList.add('selected');
+
+                // Sync to native select and fire change
+                nativeSelect.value = opt.value;
+                nativeSelect.dispatchEvent(new Event('change'));
+
+                closeDropdown();
+            });
+            dropdown.appendChild(li);
+        });
+
+        function openDropdown() {
+            // Close any other open dropdowns first
+            document.querySelectorAll('.custom-select-dropdown.open').forEach(d => {
+                if (d !== dropdown) d.classList.remove('open');
+            });
+            positionDropdown();
+            dropdown.classList.add('open');
+            btn.setAttribute('aria-expanded', 'true');
+            chevron.style.transform = 'rotate(180deg)';
+        }
+
+        function closeDropdown() {
+            dropdown.classList.remove('open');
+            btn.setAttribute('aria-expanded', 'false');
+            chevron.style.transform = '';
+        }
+
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            dropdown.classList.contains('open') ? closeDropdown() : openDropdown();
+        });
+
+        // Close on outside click
+        document.addEventListener('click', (e) => {
+            if (!wrapper.contains(e.target) && !dropdown.contains(e.target)) {
+                closeDropdown();
+            }
+        });
+
+        // Reposition if window scrolls or resizes while open
+        window.addEventListener('scroll', () => { if (dropdown.classList.contains('open')) positionDropdown(); }, true);
+        window.addEventListener('resize', () => { if (dropdown.classList.contains('open')) positionDropdown(); });
+
+        wrapper.appendChild(btn);
+        return wrapper;
+    }
+
+    // Insert custom dropdowns next to (and hiding) the native selects
+    function initCustomDropdowns() {
+        [selectTeam1, selectTeam2].forEach(sel => {
+            sel.style.display = 'none';
+            const custom = buildCustomDropdown(sel);
+            sel.parentNode.insertBefore(custom, sel);
+        });
+    }
+
+    initCustomDropdowns();
+
     // Tab switcher logic
     tabButtons.forEach(btn => {
         btn.addEventListener('click', () => {
             tabButtons.forEach(b => b.classList.remove('active'));
             tabPanes.forEach(p => p.classList.remove('active'));
-            
+
             btn.classList.add('active');
             const targetId = btn.getAttribute('data-tab');
             document.getElementById(targetId).classList.add('active');
@@ -300,7 +455,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Profiles Headers
         document.getElementById('t1Name').innerText = t1;
         document.getElementById('t2Name').innerText = t2;
-        
+
         // Profiles Avatars
         renderTeamAvatar(document.getElementById('t1Avatar'), t1);
         renderTeamAvatar(document.getElementById('t2Avatar'), t2);
@@ -358,14 +513,14 @@ document.addEventListener('DOMContentLoaded', () => {
             tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--text-muted);">No recent matches found.</td></tr>`;
             return;
         }
-        
+
         gamesList.forEach(game => {
             const tr = document.createElement('tr');
             const isHome = game.home === teamName;
             const opponent = isHome ? game.away : game.home;
             const venue = isHome ? 'Home' : 'Away';
             const scoreStr = `${game.home_goal} - ${game.away_goal}`;
-            
+
             tr.innerHTML = `
                 <td title="${opponent}">${opponent}</td>
                 <td>${venue}</td>
@@ -380,11 +535,11 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateAverageGoalsBar(labelId, valId, fillId, teamName, val) {
         document.getElementById(labelId).innerText = `${teamName} Goals`;
         document.getElementById(valId).innerText = val.toFixed(2);
-        
+
         // Assuming max average is 3.5 goals for scaling
         let percentage = (val / 3.5) * 100;
         if (percentage > 100) percentage = 100;
-        
+
         // Trigger smooth transition
         setTimeout(() => {
             document.getElementById(fillId).style.width = `${percentage}%`;
@@ -397,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function drawH2HPieChart(data) {
         if (h2hChartInstance) h2hChartInstance.destroy();
-        
+
         const ctx = document.getElementById('h2hPieChart').getContext('2d');
         h2hChartInstance = new Chart(ctx, {
             type: 'doughnut',
@@ -406,7 +561,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 datasets: [{
                     data: [data.team1_wins, data.draws, data.team2_wins],
                     backgroundColor: ['#f43f5e', '#fbbf24', '#0078d4'],
-                    borderColor: 'rgba(10, 14, 26, 0.8)',
+                    borderColor: 'rgba(255, 255, 255, 0.9)',
                     borderWidth: 2,
                     hoverOffset: 4
                 }]
@@ -418,13 +573,13 @@ document.addEventListener('DOMContentLoaded', () => {
                     legend: {
                         position: 'bottom',
                         labels: {
-                            color: '#f3f4f6',
+                            color: '#111827',
                             font: { family: 'Inter', size: 11 }
                         }
                     },
                     tooltip: {
                         callbacks: {
-                            label: function(context) {
+                            label: function (context) {
                                 const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                 const val = context.raw;
                                 const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
@@ -440,7 +595,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function drawGoalsBarChart(data) {
         if (goalsChartInstance) goalsChartInstance.destroy();
-        
+
         const ctx = document.getElementById('goalsBarChart').getContext('2d');
         goalsChartInstance = new Chart(ctx, {
             type: 'bar',
@@ -463,11 +618,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 scales: {
                     x: {
                         grid: { display: false },
-                        ticks: { color: '#9ca3af', font: { family: 'Inter' } }
+                        ticks: { color: '#6b7280', font: { family: 'Inter' } }
                     },
                     y: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#9ca3af', font: { family: 'Inter' } }
+                        grid: { color: 'rgba(0, 0, 0, 0.06)' },
+                        ticks: { color: '#6b7280', font: { family: 'Inter' } }
                     }
                 }
             }
@@ -476,12 +631,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function drawSeasonsChart(data) {
         if (seasonsChartInstance) seasonsChartInstance.destroy();
-        
+
         const seasonsData = data.goals_per_team_season;
         const labels = seasonsData.map(d => d.season);
         const t1Goals = seasonsData.map(d => d[`${data.team1}_goals`]);
         const t2Goals = seasonsData.map(d => d[`${data.team2}_goals`]);
-        
+
         const ctx = document.getElementById('seasonsGroupedBarChart').getContext('2d');
         seasonsChartInstance = new Chart(ctx, {
             type: 'bar',
@@ -508,17 +663,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 plugins: {
                     legend: {
                         position: 'top',
-                        labels: { color: '#f3f4f6', font: { family: 'Inter' } }
+                        labels: { color: '#111827', font: { family: 'Inter' } }
                     }
                 },
                 scales: {
                     x: {
                         grid: { display: false },
-                        ticks: { color: '#9ca3af', font: { family: 'Inter' } }
+                        ticks: { color: '#6b7280', font: { family: 'Inter' } }
                     },
                     y: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
-                        ticks: { color: '#9ca3af', stepSize: 1, font: { family: 'Inter' } }
+                        grid: { color: 'rgba(0, 0, 0, 0.06)' },
+                        ticks: { color: '#6b7280', stepSize: 1, font: { family: 'Inter' } }
                     }
                 }
             }
@@ -551,12 +706,12 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('thTeam1Goals').innerText = `${t1} Goals`;
         document.getElementById('thTeam2Goals').innerText = `${t2} Goals`;
         tbody.innerHTML = '';
-        
+
         if (!goalsPerTeamSeason || goalsPerTeamSeason.length === 0) {
             tbody.innerHTML = `<tr><td colspan="3" style="text-align: center; color: var(--text-muted);">No records found.</td></tr>`;
             return;
         }
-        
+
         // Reverse array to show latest seasons first
         const displayData = [...goalsPerTeamSeason].reverse();
         displayData.forEach(item => {
@@ -582,10 +737,10 @@ document.addEventListener('DOMContentLoaded', () => {
             tr.setAttribute('data-season', m.season.toLowerCase());
             tr.setAttribute('data-home', m.home.toLowerCase());
             tr.setAttribute('data-away', m.away.toLowerCase());
-            
+
             const scoreStr = `${m.home_goal} - ${m.away_goal}`;
             const detailsStr = `<span class="team-1-color font-semibold">${m.home}</span> vs <span class="team-2-color font-semibold">${m.away}</span>`;
-            
+
             tr.innerHTML = `
                 <td><strong>${m.season}</strong></td>
                 <td>${detailsStr}</td>
@@ -599,14 +754,14 @@ document.addEventListener('DOMContentLoaded', () => {
     rawMatchSearch.addEventListener('input', () => {
         const q = rawMatchSearch.value.trim().toLowerCase();
         const rows = document.querySelectorAll('#rawMatchesTableBody tr');
-        
+
         rows.forEach(row => {
             if (row.cells.length <= 1 && row.cells[0].innerText.includes("No match")) return;
-            
+
             const season = row.getAttribute('data-season') || "";
             const home = row.getAttribute('data-home') || "";
             const away = row.getAttribute('data-away') || "";
-            
+
             if (season.includes(q) || home.includes(q) || away.includes(q)) {
                 row.style.display = '';
             } else {

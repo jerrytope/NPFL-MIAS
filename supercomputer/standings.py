@@ -13,9 +13,14 @@ from supercomputer.models import Prediction
 SEASON = '26/27'
 
 
-def calculate_standings(season=SEASON):
+def calculate_standings(season=SEASON, max_match_day=None):
     """
-    Calculate predicted league standings from all predictions for a season.
+    Calculate predicted league standings from predictions up to a given match day.
+
+    Args:
+        season: Season identifier string.
+        max_match_day: If set, only include predictions for fixtures with
+                       match_day <= this value. None = all match days.
 
     Returns a list of dicts sorted by points (desc), each containing:
         position, team, played, won, drawn, lost, points
@@ -23,6 +28,9 @@ def calculate_standings(season=SEASON):
     predictions = Prediction.objects.filter(
         fixture__season=season,
     ).select_related('fixture__home', 'fixture__away')
+
+    if max_match_day is not None:
+        predictions = predictions.filter(fixture__match_day__lte=max_match_day)
 
     # Team stats accumulator
     stats = defaultdict(lambda: {

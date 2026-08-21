@@ -85,8 +85,26 @@ def models_Q_home_or_away(team):
 
 
 def standings(request):
-    """Render the predicted league standings page."""
-    standings_data = calculate_standings()
+    """Render the predicted league standings page with optional match day filter."""
+    max_md = request.GET.get('match_day')
+    max_match_day = None
+    if max_md:
+        try:
+            max_match_day = int(max_md)
+        except ValueError:
+            pass
+
+    # Get all available match days for the selector
+    all_match_days = list(
+        SeasonFixture.objects.filter(season='26/27')
+        .values_list('match_day', flat=True)
+        .distinct()
+        .order_by('match_day')
+    )
+
+    standings_data = calculate_standings(max_match_day=max_match_day)
     return render(request, 'supercomputer/standings.html', {
         'standings': standings_data,
+        'all_match_days': all_match_days,
+        'selected_md': max_match_day,
     })

@@ -187,6 +187,76 @@
             </div>
         </div>
 
+        <!-- Tables & Raw Data Section -->
+        <div class="tabs-section">
+            <div class="tabs-header">
+                <button class="tab-btn active" data-tab="tabRawMatches">H2H Match History</button>
+                <button class="tab-btn" data-tab="tabSeasonPerTeam">Season Goals Per Team</button>
+                <button class="tab-btn" data-tab="tabSeasonGoals">Season Goals</button>
+            </div>
+            
+            <div class="tabs-content">
+                <!-- Tab: Raw Match History (first & default) -->
+                <div class="tab-pane active" id="tabRawMatches">
+                    <div class="table-filter-bar">
+                        <div class="search-box">
+                            <i class="fa-solid fa-magnifying-glass"></i>
+                            <input type="text" id="rawMatchSearch" placeholder="Search matches by season or team name...">
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="table-standard" id="rawMatchesTable">
+                            <thead>
+                                <tr>
+                                    <th>Season</th>
+                                    <th>Match Details</th>
+                                    <th>Score</th>
+                                </tr>
+                            </thead>
+                            <tbody id="rawMatchesTableBody">
+                                <!-- Filled by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Tab: Season Goals Per Team -->
+                <div class="tab-pane" id="tabSeasonPerTeam">
+                    <div class="table-wrapper">
+                        <table class="table-standard">
+                            <thead>
+                                <tr>
+                                    <th>Season</th>
+                                    <th id="thTeam1Goals">Team 1 Goals</th>
+                                    <th id="thTeam2Goals">Team 2 Goals</th>
+                                </tr>
+                            </thead>
+                            <tbody id="seasonPerTeamTableBody">
+                                <!-- Filled by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- Tab: Season Goals (last) -->
+                <div class="tab-pane" id="tabSeasonGoals">
+                    <div class="table-wrapper">
+                        <table class="table-standard">
+                            <thead>
+                                <tr>
+                                    <th>Season</th>
+                                    <th>Total Goals Scored H2H</th>
+                                </tr>
+                            </thead>
+                            <tbody id="seasonGoalsTableBody">
+                                <!-- Filled by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Goals & Averages Panel -->
         <div class="goals-analysis-section">
             <div class="card goals-averages-card">
@@ -227,19 +297,6 @@
             </div>
         </div>
 
-        <div class="card report-card" id="reportCard" style="display: none;">
-            <div class="report-header">
-                <h3>MIAS-AI Analyst Report</h3>
-                <span class="report-status" id="reportStatus">Select two teams and click Generate MIAS AI Report.</span>
-            </div>
-            <div class="report-body" id="reportContent">
-                <p class="report-placeholder">The expert analysis will appear here once the report is generated.</p>
-            </div>
-            <div class="report-source" id="reportSource" style="display:none; text-align:right; padding:8px 16px; font-size:12px; color:var(--color-text-muted); border-top:1px solid var(--color-border);">
-                <span id="reportSourceLabel"></span>
-            </div>
-        </div>
-
         <!-- Visualization Charts Grid -->
         <div class="charts-grid">
             <div class="card chart-card">
@@ -267,73 +324,17 @@
             </div>
         </div>
 
-        <!-- Tables & Raw Data Section -->
-        <div class="tabs-section">
-            <div class="tabs-header">
-                <button class="tab-btn active" data-tab="tabSeasonGoals">Season Goals</button>
-                <button class="tab-btn" data-tab="tabSeasonPerTeam">Season Goals Per Team</button>
-                <button class="tab-btn" data-tab="tabRawMatches">H2H Match History</button>
+        <!-- MIAS-AI Analyst Report (last section) -->
+        <div class="card report-card" id="reportCard" style="display: none;">
+            <div class="report-header">
+                <h3>MIAS-AI Analyst Report</h3>
+                <span class="report-status" id="reportStatus">Select two teams and click Generate MIAS AI Report.</span>
             </div>
-            
-            <div class="tabs-content">
-                <!-- Tab: Season Goals -->
-                <div class="tab-pane active" id="tabSeasonGoals">
-                    <div class="table-wrapper">
-                        <table class="table-standard">
-                            <thead>
-                                <tr>
-                                    <th>Season</th>
-                                    <th>Total Goals Scored H2H</th>
-                                </tr>
-                            </thead>
-                            <tbody id="seasonGoalsTableBody">
-                                <!-- Filled by JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Tab: Season Goals Per Team -->
-                <div class="tab-pane" id="tabSeasonPerTeam">
-                    <div class="table-wrapper">
-                        <table class="table-standard">
-                            <thead>
-                                <tr>
-                                    <th>Season</th>
-                                    <th id="thTeam1Goals">Team 1 Goals</th>
-                                    <th id="thTeam2Goals">Team 2 Goals</th>
-                                </tr>
-                            </thead>
-                            <tbody id="seasonPerTeamTableBody">
-                                <!-- Filled by JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-                
-                <!-- Tab: Raw Match History -->
-                <div class="tab-pane" id="tabRawMatches">
-                    <div class="table-filter-bar">
-                        <div class="search-box">
-                            <i class="fa-solid fa-magnifying-glass"></i>
-                            <input type="text" id="rawMatchSearch" placeholder="Search matches by season or team name...">
-                        </div>
-                    </div>
-                    <div class="table-wrapper">
-                        <table class="table-standard" id="rawMatchesTable">
-                            <thead>
-                                <tr>
-                                    <th>Season</th>
-                                    <th>Match Details</th>
-                                    <th>Score</th>
-                                </tr>
-                            </thead>
-                            <tbody id="rawMatchesTableBody">
-                                <!-- Filled by JS -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <div class="report-body" id="reportContent">
+                <p class="report-placeholder">The expert analysis will appear here once the report is generated.</p>
+            </div>
+            <div class="report-source" id="reportSource" style="display:none; text-align:right; padding:8px 16px; font-size:12px; color:var(--color-text-muted); border-top:1px solid var(--color-border);">
+                <span id="reportSourceLabel"></span>
             </div>
         </div>
     </div>
