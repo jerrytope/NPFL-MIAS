@@ -1,0 +1,146 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block nav_prediction_breakdown %}active{% endblock %}
+{% block page_title %}Prediction Breakdown{% endblock %}
+
+{% block content %}
+<style>
+    .pb-fixtures summary { cursor:pointer; list-style:none; color:var(--color-primary); font-weight:600; font-size:12px; }
+    .pb-fixtures summary::-webkit-details-marker { display:none; }
+    .pb-fixtures-list { margin:10px 0 0; padding:0; list-style:none; text-align:left; }
+    .pb-fixtures-list li { display:flex; align-items:center; gap:10px; padding:4px 0; font-size:12px; color:var(--color-text-muted); border-bottom:1px solid var(--color-border); }
+    .pb-fixtures-list li:last-child { border-bottom:none; }
+    .pb-fixtures-list .pb-md { width:34px; flex-shrink:0; opacity:.7; }
+    .pb-fixtures-list .pb-opp { flex:1; color:var(--color-text); }
+    .pb-fixtures-list .pb-pcts { display:flex; gap:8px; font-family:'Orbitron',monospace; font-size:11px; }
+    .pb-group-title { font-size:11px; text-transform:uppercase; letter-spacing:.04em; font-weight:700; margin:14px 0 4px; opacity:.8; }
+    .pb-group-title:first-of-type { margin-top:4px; }
+</style>
+<div class="section-header" style="display:flex; align-items:center; justify-content:space-between;">
+    <h3><i class="fas fa-list-check" style="color:var(--color-primary); margin-right:8px;"></i> Predicted Home/Away Breakdown (Expected) — {{ season }}</h3>
+</div>
+
+<div style="display:flex; align-items:center; gap:12px; margin:16px 0; padding:12px 16px; background:var(--color-card); border:1px solid var(--color-border); border-radius:10px; flex-wrap:wrap;">
+    <span style="font-size:12px; color:var(--color-text-muted); font-style:italic;">
+        Expected values (sum of each fixture's own win/draw/loss chance) — the same method used on the Standings page and the Super Computer stat banner. Click "View fixtures" to see opponents and per-match percentages.
+    </span>
+    <div style="margin-left:auto; display:flex; align-items:center; gap:8px;">
+        <i class="fas fa-search" style="color:var(--color-text-muted); font-size:12px;"></i>
+        <input type="text" id="teamSearch" placeholder="Find a team..." oninput="filterTeamRows(this.value)" style="padding:8px 12px; border-radius:8px; border:1px solid var(--color-border); background:rgba(255,255,255,0.04); color:var(--color-text); font-size:13px; font-family:var(--font); outline:none; min-width:200px;">
+    </div>
+</div>
+
+{% if breakdown %}
+<div class="data-table-wrapper">
+    <table class="data-table" id="breakdownTable">
+        <thead>
+            <tr>
+                <th rowspan="2" style="vertical-align:bottom;">Team</th>
+                <th colspan="4" style="text-align:center; border-bottom:1px solid var(--color-border);">Home (predicted)</th>
+                <th colspan="4" style="text-align:center; border-bottom:1px solid var(--color-border);">Away (predicted)</th>
+            </tr>
+            <tr>
+                <th style="text-align:center;">P</th>
+                <th style="text-align:center;">xW</th>
+                <th style="text-align:center;">xD</th>
+                <th style="text-align:center;">xL</th>
+                <th style="text-align:center;">P</th>
+                <th style="text-align:center;">xW</th>
+                <th style="text-align:center;">xD</th>
+                <th style="text-align:center;">xL</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in breakdown %}
+            <tr data-team="{{ row.team|lower }}">
+                <td style="font-weight:600;">{{ row.team }}</td>
+                <td style="text-align:center;">{{ row.home_played }}</td>
+                <td style="text-align:center; color:var(--color-primary);">{{ row.home_win }}</td>
+                <td style="text-align:center;">{{ row.home_draw }}</td>
+                <td style="text-align:center; color:var(--color-danger);">{{ row.home_loss }}</td>
+                <td style="text-align:center;">{{ row.away_played }}</td>
+                <td style="text-align:center; color:var(--color-primary);">{{ row.away_win }}</td>
+                <td style="text-align:center;">{{ row.away_draw }}</td>
+                <td style="text-align:center; color:var(--color-danger);">{{ row.away_loss }}</td>
+            </tr>
+            <tr data-team="{{ row.team|lower }}">
+                <td colspan="9" style="padding-top:0; padding-bottom:14px;">
+                    <details class="pb-fixtures">
+                        <summary>View {{ row.home_played|add:row.away_played }} fixtures</summary>
+                        <p style="font-size:11px; color:var(--color-text-muted); font-style:italic; margin:8px 0 0;">
+                            Grouped by the model's single favorite pick for each individual match &mdash; not the same as the season-long expected totals (xW/xD/xL) above, which account for every match's full win/draw/loss chance, not just its top pick.
+                        </p>
+
+                        <div class="pb-group-title" style="color:var(--color-primary);">Favored to Win ({{ row.likely_wins|length }})</div>
+                        {% if row.likely_wins %}
+                        <ul class="pb-fixtures-list">
+                            {% for g in row.likely_wins %}
+                            <li>
+                                <span class="pb-md">MD{{ g.match_day }}</span>
+                                <span class="pb-opp">({{ g.venue }}) vs {{ g.team }}</span>
+                                <span class="pb-pcts">
+                                    <span style="color:var(--color-primary);">{{ g.win_pct }}%</span>
+                                    <span style="opacity:.6;">{{ g.draw_pct }}%</span>
+                                    <span style="color:var(--color-danger);">{{ g.loss_pct }}%</span>
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}<p style="font-size:12px; color:var(--color-text-muted); margin:4px 0;">None</p>{% endif %}
+
+                        <div class="pb-group-title">Favored to Draw ({{ row.likely_draws|length }})</div>
+                        {% if row.likely_draws %}
+                        <ul class="pb-fixtures-list">
+                            {% for g in row.likely_draws %}
+                            <li>
+                                <span class="pb-md">MD{{ g.match_day }}</span>
+                                <span class="pb-opp">({{ g.venue }}) vs {{ g.team }}</span>
+                                <span class="pb-pcts">
+                                    <span style="color:var(--color-primary);">{{ g.win_pct }}%</span>
+                                    <span style="opacity:.6;">{{ g.draw_pct }}%</span>
+                                    <span style="color:var(--color-danger);">{{ g.loss_pct }}%</span>
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}<p style="font-size:12px; color:var(--color-text-muted); margin:4px 0;">None</p>{% endif %}
+
+                        <div class="pb-group-title" style="color:var(--color-danger);">Favored to Lose ({{ row.likely_losses|length }})</div>
+                        {% if row.likely_losses %}
+                        <ul class="pb-fixtures-list">
+                            {% for g in row.likely_losses %}
+                            <li>
+                                <span class="pb-md">MD{{ g.match_day }}</span>
+                                <span class="pb-opp">({{ g.venue }}) vs {{ g.team }}</span>
+                                <span class="pb-pcts">
+                                    <span style="color:var(--color-primary);">{{ g.win_pct }}%</span>
+                                    <span style="opacity:.6;">{{ g.draw_pct }}%</span>
+                                    <span style="color:var(--color-danger);">{{ g.loss_pct }}%</span>
+                                </span>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        {% else %}<p style="font-size:12px; color:var(--color-text-muted); margin:4px 0;">None</p>{% endif %}
+                    </details>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+<script>
+    function filterTeamRows(query) {
+        const q = query.trim().toLowerCase();
+        document.querySelectorAll('#breakdownTable tbody tr').forEach(function (tr) {
+            tr.style.display = tr.dataset.team.includes(q) ? '' : 'none';
+        });
+    }
+</script>
+{% else %}
+<div class="empty-state">
+    <i class="fas fa-list-check"></i>
+    <h3>No predictions yet</h3>
+    <p>Generate predictions first to see the prediction breakdown.</p>
+</div>
+{% endif %}
+{% endblock %}

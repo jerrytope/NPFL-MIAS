@@ -44,10 +44,10 @@
                 <th style="width:50px;">#</th>
                 <th>Team</th>
                 <th style="text-align:center;">P</th>
-                <th style="text-align:center;">W</th>
-                <th style="text-align:center;">D</th>
-                <th style="text-align:center;">L</th>
-                <th style="text-align:center;">Pts</th>
+                <th style="text-align:center;">xW</th>
+                <th style="text-align:center;">xD</th>
+                <th style="text-align:center;">xL</th>
+                <th style="text-align:center;">xPts</th>
             </tr>
         </thead>
         <tbody>
@@ -58,11 +58,11 @@
                 </td>
                 <td style="font-weight:600;">{{ row.team }}</td>
                 <td style="text-align:center;">{{ row.played }}</td>
-                <td style="text-align:center;">{{ row.won }}</td>
-                <td style="text-align:center;">{{ row.drawn }}</td>
-                <td style="text-align:center;">{{ row.lost }}</td>
+                <td style="text-align:center;">{{ row.won|floatformat:0 }}</td>
+                <td style="text-align:center;">{{ row.drawn|floatformat:0 }}</td>
+                <td style="text-align:center;">{{ row.lost|floatformat:0 }}</td>
                 <td style="text-align:center; font-weight:800; font-family:'Orbitron',monospace; font-size:15px; color:var(--color-primary);">
-                    {{ row.points }}
+                    {{ row.points|floatformat:0 }}
                 </td>
             </tr>
             {% endfor %}

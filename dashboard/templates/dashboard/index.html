@@ -19,10 +19,20 @@
             <span class="status-dot green"></span>
             <span class="status-text">Cache Synced</span>
         </div>
+        <button class="theme-toggle-btn" id="themeToggle" title="Switch to dark mode">
+            <i class="fas fa-moon"></i>
+            <span class="theme-label">Dark</span>
+        </button>
         <a href="/supercomputer/" class="btn btn-primary btn-icon-text" title="View NPFL game predictions">
             <i class="fa-solid fa-futbol"></i>
             <span>NPFL Games Predictions</span>
         </a>
+        {% if user.is_authenticated %}
+        <a href="{% url 'admin_logout' %}" class="btn btn-secondary btn-icon-text" title="Log out">
+            <i class="fa-solid fa-right-from-bracket"></i>
+            <span>Logout</span>
+        </a>
+        {% endif %}
     </div>
 </header>
 
@@ -203,8 +213,13 @@
                             <i class="fa-solid fa-magnifying-glass"></i>
                             <input type="text" id="rawMatchSearch" placeholder="Search matches by season or team name...">
                         </div>
+                        {% if user.is_authenticated %}
+                        <button class="download-btn download-btn-inline" title="Download PNG" onclick="downloadElementAsPNG('tabRawMatchesTableWrapper', 'h2h-match-history')">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                        {% endif %}
                     </div>
-                    <div class="table-wrapper">
+                    <div class="table-wrapper" id="tabRawMatchesTableWrapper">
                         <table class="table-standard" id="rawMatchesTable">
                             <thead>
                                 <tr>
@@ -222,7 +237,14 @@
                 
                 <!-- Tab: Season Goals Per Team -->
                 <div class="tab-pane" id="tabSeasonPerTeam">
-                    <div class="table-wrapper">
+                    {% if user.is_authenticated %}
+                    <div class="table-filter-bar">
+                        <button class="download-btn download-btn-inline" title="Download PNG" onclick="downloadElementAsPNG('tabSeasonPerTeamTableWrapper', 'season-goals-per-team')">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                    </div>
+                    {% endif %}
+                    <div class="table-wrapper" id="tabSeasonPerTeamTableWrapper">
                         <table class="table-standard">
                             <thead>
                                 <tr>
@@ -237,10 +259,17 @@
                         </table>
                     </div>
                 </div>
-                
+
                 <!-- Tab: Season Goals (last) -->
                 <div class="tab-pane" id="tabSeasonGoals">
-                    <div class="table-wrapper">
+                    {% if user.is_authenticated %}
+                    <div class="table-filter-bar">
+                        <button class="download-btn download-btn-inline" title="Download PNG" onclick="downloadElementAsPNG('tabSeasonGoalsTableWrapper', 'season-goals')">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                    </div>
+                    {% endif %}
+                    <div class="table-wrapper" id="tabSeasonGoalsTableWrapper">
                         <table class="table-standard">
                             <thead>
                                 <tr>
@@ -299,24 +328,39 @@
 
         <!-- Visualization Charts Grid -->
         <div class="charts-grid">
-            <div class="card chart-card">
+            <div class="card chart-card" id="h2hPieChartCard">
                 <div class="watermark-overlay"></div>
+                {% if user.is_authenticated %}
+                <button class="download-btn" title="Download PNG" onclick="downloadElementAsPNG('h2hPieChartCard', 'h2h-distribution')">
+                    <i class="fa-solid fa-download"></i>
+                </button>
+                {% endif %}
                 <h3>H2H Distribution</h3>
                 <div class="chart-canvas-wrapper small-chart">
                     <canvas id="h2hPieChart"></canvas>
                 </div>
             </div>
-            
-            <div class="card chart-card">
+
+            <div class="card chart-card" id="goalsBarChartCard">
                 <div class="watermark-overlay"></div>
+                {% if user.is_authenticated %}
+                <button class="download-btn" title="Download PNG" onclick="downloadElementAsPNG('goalsBarChartCard', 'goals-scored-h2h')">
+                    <i class="fa-solid fa-download"></i>
+                </button>
+                {% endif %}
                 <h3>Goals Scored H2H</h3>
                 <div class="chart-canvas-wrapper small-chart">
                     <canvas id="goalsBarChart"></canvas>
                 </div>
             </div>
-            
-            <div class="card chart-card full-width">
+
+            <div class="card chart-card full-width" id="seasonsGroupedBarChartCard">
                 <div class="watermark-overlay"></div>
+                {% if user.is_authenticated %}
+                <button class="download-btn" title="Download PNG" onclick="downloadElementAsPNG('seasonsGroupedBarChartCard', 'h2h-goals-last-10-seasons')">
+                    <i class="fa-solid fa-download"></i>
+                </button>
+                {% endif %}
                 <h3>H2H Goals Distribution (Last 10 Seasons)</h3>
                 <div class="chart-canvas-wrapper long-chart">
                     <canvas id="seasonsGroupedBarChart"></canvas>

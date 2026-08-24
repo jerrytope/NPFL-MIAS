@@ -9,7 +9,7 @@ let allPredictions = [];
 let filteredPredictions = [];
 let currentPage = 1;
 let teams = new Set();
-let matchDays = new Set();
+let maxVisibleMatchDay = 0; // dropdown only offers 1..this — see updateRevealStatus()
 
 // ---------- DOM Elements ----------
 const $ = (sel) => document.querySelector(sel);
@@ -20,10 +20,14 @@ const els = {
     teamSelect: $('#teamSelect'),
     clearFilters: $('#clearFilters'),
     activeFilters: $('#activeFilters'),
+    revealStatus: $('#revealStatus'),
     statTotal: $('#statTotal'),
     statHomeWins: $('#statHomeWins'),
+    statHomeWinsLabel: $('#statHomeWinsLabel'),
     statDraws: $('#statDraws'),
+    statDrawsLabel: $('#statDrawsLabel'),
     statAwayWins: $('#statAwayWins'),
+    statAwayWinsLabel: $('#statAwayWinsLabel'),
     grid: $('#predictionsGrid'),
     pagination: $('#pagination'),
     loading: $('#loadingState'),
@@ -68,6 +72,7 @@ async function loadPredictions() {
         allPredictions = data.results;
         filteredPredictions = allPredictions;
 
+        updateRevealStatus(data.max_visible_match_day, data.total_match_days);
         populateFilterOptions();
         applyFilters();
 
@@ -80,25 +85,51 @@ async function loadPredictions() {
     }
 }
 
+// ---------- Progressive reveal ----------
+// "All Match Days" always shows the full season (matches the Standings
+// page). Only jumping ahead to browse ONE SPECIFIC future match day is
+// gated — you can't select Match Day N in the dropdown until every fixture
+// in Match Day N-1 has a result entered (see supercomputer/views.py::
+// _max_visible_match_day). This just surfaces why some match days aren't
+// selectable yet, so it doesn't look like the dropdown is broken.
+function updateRevealStatus(apiMaxVisibleMatchDay, totalMatchDays) {
+    maxVisibleMatchDay = apiMaxVisibleMatchDay;
+
+    if (!els.revealStatus) return;
+
+    if (!totalMatchDays || maxVisibleMatchDay >= totalMatchDays) {
+        els.revealStatus.style.display = 'none';
+        return;
+    }
+
+    els.revealStatus.innerHTML = `
+        <i class="fas fa-lock"></i>
+        Match Days 1&ndash;${maxVisibleMatchDay} of ${totalMatchDays} are individually selectable.
+        Match Day ${maxVisibleMatchDay + 1} unlocks once every Match Day ${maxVisibleMatchDay} result has been entered
+        &mdash; "All Match Days" always shows the full season.
+    `;
+    els.revealStatus.style.display = 'block';
+}
+
 function populateFilterOptions() {
     teams = new Set();
-    matchDays = new Set();
 
     allPredictions.forEach(p => {
         teams.add(p.home);
         teams.add(p.away);
-        matchDays.add(p.match_day);
     });
 
     const currentMD = els.matchDaySelect.value;
     if (els.matchDaySelect.options.length <= 1) {
-        const sortedMDs = [...matchDays].sort((a, b) => a - b);
-        sortedMDs.forEach(md => {
+        // Only unlocked match days are selectable — allPredictions holds the
+        // full season (see predictions_api), but jumping ahead to browse a
+        // specific future match day individually stays gated.
+        for (let md = 1; md <= maxVisibleMatchDay; md++) {
             const opt = document.createElement('option');
             opt.value = md;
             opt.textContent = `Match Day ${md}`;
             els.matchDaySelect.appendChild(opt);
-        });
+        }
     }
 
     if (els.teamSelect.options.length <= 1) {
@@ -159,16 +190,70 @@ function updateActiveFilters() {
 }
 
 // ---------- Stats ----------
+// Two different, deliberate methods depending on whether a filter is active:
+//
+// - No filter at all ("All Match Days" / "All Teams"): expected value — sum
+//   of each match's real win/draw/loss probability. This is the SAME method
+//   the Standings page's Tab 1 is built from, so the season-wide numbers
+//   shown here match what's actually driving the predicted table (e.g. a
+//   ~60 total expected away wins across the season, not a raw badge count).
+//
+// - Any filter active (team and/or match day): count each card's actual
+//   predicted_result pick instead, so the banner always matches the visible
+//   badges in the (now much shorter) filtered list below it — expected
+//   value structurally can't match a short, specific list of cards, which
+//   was a recurring source of confusion when filtered down to one team or
+//   match day.
+//
+// When a team filter is active, "home"/"draw"/"away" no longer means
+// anything useful (half the filtered team's own fixtures are ones where
+// THEY are the away side) — so the three numbers are reoriented to the
+// selected team's own win/draw/loss instead, and relabeled accordingly.
 function updateStats() {
+    if (!els.statTotal) return; // banner not present on the page
+
     const data = filteredPredictions;
-    const homeWins = data.filter(p => p.predicted_result === 'HOME').length;
-    const draws = data.filter(p => p.predicted_result === 'DRAW').length;
-    const awayWins = data.filter(p => p.predicted_result === 'AWAY').length;
+    const team = els.teamSelect.value;
+    const matchDay = els.matchDaySelect.value;
+    const filtered = Boolean(team || matchDay);
+
+    let winCount = 0;
+    let drawCount = 0;
+    let lossCount = 0;
+
+    if (filtered) {
+        data.forEach(p => {
+            if (p.predicted_result === 'DRAW') {
+                drawCount++;
+                return;
+            }
+            const teamIsAway = team && p.away === team;
+            const homeWins = p.predicted_result === 'HOME';
+            if (team ? (homeWins === teamIsAway) : !homeWins) {
+                lossCount++; // team lost (or, unfiltered, this is the "AWAY" bucket)
+            } else {
+                winCount++;
+            }
+        });
+    } else {
+        data.forEach(p => {
+            winCount += p.home_win_pct / 100;
+            drawCount += p.draw_pct / 100;
+            lossCount += p.away_win_pct / 100;
+        });
+        winCount = Math.round(winCount);
+        drawCount = Math.round(drawCount);
+        lossCount = Math.round(lossCount);
+    }
 
     animateNumber(els.statTotal, data.length);
-    animateNumber(els.statHomeWins, homeWins);
-    animateNumber(els.statDraws, draws);
-    animateNumber(els.statAwayWins, awayWins);
+    animateNumber(els.statHomeWins, winCount);
+    animateNumber(els.statDraws, drawCount);
+    animateNumber(els.statAwayWins, lossCount);
+
+    els.statHomeWinsLabel.textContent = team ? 'Wins' : 'Home Wins';
+    els.statDrawsLabel.textContent = 'Draws';
+    els.statAwayWinsLabel.textContent = team ? 'Losses' : 'Away Wins';
 }
 
 function animateNumber(el, target) {
@@ -212,6 +297,16 @@ function renderPredictions() {
     });
 }
 
+// Which result the selected team gets out of this fixture (independent of
+// which side of the fixture they're on), or null if no team filter is active.
+function getTeamRelativeResult(p, team) {
+    if (!team || (p.home !== team && p.away !== team)) return null;
+    const teamIsAway = p.away === team;
+    if (p.predicted_result === 'DRAW') return 'DRAW';
+    const homeWins = p.predicted_result === 'HOME';
+    return (homeWins !== teamIsAway) ? 'WIN' : 'LOSS';
+}
+
 function createPredictionCard(p) {
     const card = document.createElement('div');
     card.className = 'prediction-card';
@@ -219,6 +314,10 @@ function createPredictionCard(p) {
 
     const confidenceLevel = p.confidence >= 60 ? 'High' : p.confidence >= 40 ? 'Medium' : 'Low';
     const confidenceColor = p.confidence >= 60 ? 'var(--accent-green)' : p.confidence >= 40 ? 'var(--accent-amber)' : 'var(--accent-red)';
+
+    const selectedTeam = els.teamSelect.value;
+    const teamResult = getTeamRelativeResult(p, selectedTeam);
+    const teamResultClass = teamResult === 'WIN' ? 'team-win' : teamResult === 'LOSS' ? 'team-loss' : 'team-draw';
 
     card.innerHTML = `
         <div class="card-match-day">Match Day ${p.match_day}</div>
@@ -260,6 +359,7 @@ function createPredictionCard(p) {
             <span class="result-badge ${p.predicted_result}">
                 ${getResultIcon(p.predicted_result)} ${p.predicted_result} Win
             </span>
+            ${teamResult ? `<span class="result-badge ${teamResultClass}">${selectedTeam}: ${teamResult}</span>` : ''}
             <span class="confidence-meter">
                 Confidence: <strong style="color:${confidenceColor}">${p.confidence.toFixed(1)}%</strong>
                 <small>(${confidenceLevel})</small>
@@ -267,16 +367,16 @@ function createPredictionCard(p) {
         </div>
         <div class="card-breakdown">
             <div class="breakdown-item">
-                <div class="breakdown-label">Form</div>
-                <div class="breakdown-value">${p.home_form_score.toFixed(2)} / ${p.away_form_score.toFixed(2)}</div>
+                <div class="breakdown-label">Expected Goals</div>
+                <div class="breakdown-value">${p.home_lambda.toFixed(2)} / ${p.away_lambda.toFixed(2)}</div>
             </div>
             <div class="breakdown-item">
-                <div class="breakdown-label">H2H</div>
-                <div class="breakdown-value">${(p.h2h_home_rate * 100).toFixed(0)}-${(p.h2h_draw_rate * 100).toFixed(0)}-${(p.h2h_away_rate * 100).toFixed(0)}</div>
+                <div class="breakdown-label">Attack</div>
+                <div class="breakdown-value">${p.home_attack.toFixed(2)} / ${p.away_attack.toFixed(2)}</div>
             </div>
             <div class="breakdown-item">
-                <div class="breakdown-label">Venue</div>
-                <div class="breakdown-value">${(p.home_venue_strength * 100).toFixed(0)}% / ${(p.away_venue_strength * 100).toFixed(0)}%</div>
+                <div class="breakdown-label">Defense</div>
+                <div class="breakdown-value">${p.home_defense.toFixed(2)} / ${p.away_defense.toFixed(2)}</div>
             </div>
             <div class="breakdown-item">
                 <div class="breakdown-label">Transfer</div>

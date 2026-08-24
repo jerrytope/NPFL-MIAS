@@ -19,6 +19,8 @@
 
     <!-- Super Computer CSS -->
     <link rel="stylesheet" href="{% static 'supercomputer/style.css' %}">
+    <!-- Theme toggle (loaded early to prevent flash) -->
+    <script src="{% static 'theme.js' %}"></script>
 </head>
 
 <body>
@@ -41,7 +43,11 @@
                         <p class="sc-subtitle">MAIS-AI-Powered Match Predictions — 2026/27 Season</p>
                     </div>
                 </div>
-                <div class="header-right" style="display:flex; gap:10px;">
+                <div class="header-right" style="display:flex; gap:10px; align-items:center;">
+                    <button class="theme-toggle-btn" id="themeToggle" title="Switch to dark mode">
+                        <i class="fas fa-moon"></i>
+                        <span class="theme-label">Dark</span>
+                    </button>
                     <a href="/supercomputer/standings/"
                         style="display:inline-flex; align-items:center; gap:6px; padding:8px 16px; border-radius:8px; background:rgba(14,165,233,0.08); border:1px solid rgba(14,165,233,0.2); color:#0ea5e9; text-decoration:none; font-size:13px; font-weight:600; transition:all 0.2s;">
                         <i class="fas fa-trophy"></i> Standings
@@ -80,7 +86,13 @@
             <div id="activeFilters" class="active-filters" style="display:none;"></div>
         </section>
 
-        <!-- Summary Stats Banner -->
+        <!-- Progressive reveal status — populated in script.js from predictions_api's
+             max_visible_match_day/total_match_days once results start coming in. -->
+        <div id="revealStatus" class="reveal-status" style="display:none;"></div>
+
+        <!-- Summary Stats Banner — counts each card's actual predicted_result pick
+             (not an expected-value sum), so this always matches the badges shown
+             on the individual match cards below it. -->
         <section class="stats-banner">
             <div class="stat-card">
                 <div class="stat-icon"><i class="fas fa-gamepad"></i></div>
@@ -93,21 +105,21 @@
                 <div class="stat-icon"><i class="fas fa-home"></i></div>
                 <div class="stat-info">
                     <span class="stat-value" id="statHomeWins">0</span>
-                    <span class="stat-label">Home Wins</span>
+                    <span class="stat-label" id="statHomeWinsLabel">Home Wins</span>
                 </div>
             </div>
             <div class="stat-card stat-draw">
                 <div class="stat-icon"><i class="fas fa-handshake"></i></div>
                 <div class="stat-info">
                     <span class="stat-value" id="statDraws">0</span>
-                    <span class="stat-label">Draws</span>
+                    <span class="stat-label" id="statDrawsLabel">Draws</span>
                 </div>
             </div>
             <div class="stat-card stat-away">
                 <div class="stat-icon"><i class="fas fa-plane"></i></div>
                 <div class="stat-info">
                     <span class="stat-value" id="statAwayWins">0</span>
-                    <span class="stat-label">Away Wins</span>
+                    <span class="stat-label" id="statAwayWinsLabel">Away Wins</span>
                 </div>
             </div>
         </section>

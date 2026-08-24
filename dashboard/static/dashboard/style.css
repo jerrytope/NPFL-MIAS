@@ -689,6 +689,38 @@ body {
     height: 320px;
 }
 
+/* Admin-only "Download PNG" buttons — chart cards (absolute, top-right corner,
+   opposite the watermark) and table headers (inline, within .table-filter-bar) */
+.download-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+    color: var(--text-secondary, #6b7280);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 2;
+}
+
+.download-btn:hover {
+    color: var(--accent-color, #2563eb);
+    border-color: var(--accent-color, #2563eb);
+}
+
+.chart-card > .download-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+}
+
+.download-btn-inline {
+    flex-shrink: 0;
+}
+
 /* Watermark styles */
 .watermark-overlay {
     position: absolute;
@@ -771,7 +803,7 @@ body {
 .search-box {
     display: flex;
     align-items: center;
-    background: #f9fafb;
+    background: var(--bg-search, #f9fafb);
     border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 0.5rem 0.875rem;
@@ -818,8 +850,8 @@ body {
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.14);
+    background: var(--bg-select, #ffffff);
+    border: 1px solid var(--border-select, rgba(0, 0, 0, 0.14));
     border-radius: 8px;
     padding: 0.75rem 1rem;
     cursor: pointer;
@@ -868,8 +900,8 @@ body {
     top: calc(100% + 6px);
     left: 0;
     right: 0;
-    background: #ffffff;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    background: var(--bg-select, #ffffff);
+    border: 1px solid var(--border-select, rgba(0, 0, 0, 0.1));
     border-radius: 10px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
     list-style: none;
@@ -989,6 +1021,206 @@ body {
     }
 }
 
+}
+
+/* ==========================================================================
+   Theme Toggle Button — shared across all sections
+   ========================================================================== */
+
+.theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    font-family: var(--font-sans);
+    cursor: pointer;
+    border: 1px solid var(--border-color);
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.theme-toggle-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-glow);
+}
+
+.theme-toggle-btn i {
+    font-size: 0.8125rem;
+    transition: transform 0.3s ease;
+}
+
+.theme-toggle-btn:hover i {
+    transform: rotate(20deg);
+}
+
+/* ==========================================================================
+   Dark Mode — Dashboard
+   ========================================================================== */
+
+[data-theme="dark"] {
+    --bg-main: #0a0e1a;
+    --bg-card: rgba(17, 24, 39, 0.85);
+    --bg-card-hover: rgba(30, 41, 59, 0.85);
+    --border-color: rgba(255, 255, 255, 0.08);
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #475569;
+    --primary: #38bdf8;
+    --primary-glow: rgba(56, 189, 248, 0.12);
+    --accent-red: #fb7185;
+    --accent-red-glow: rgba(251, 113, 133, 0.12);
+    --accent-blue: #60a5fa;
+    --accent-blue-glow: rgba(96, 165, 250, 0.12);
+    --accent-yellow: #fbbf24;
+    --accent-green: #34d399;
+}
+
+[data-theme="dark"] body {
+    background-color: var(--bg-main);
+    background-image:
+        radial-gradient(at 10% 20%, rgba(56, 189, 248, 0.05) 0px, transparent 50%),
+        radial-gradient(at 90% 80%, rgba(167, 139, 250, 0.03) 0px, transparent 50%);
+}
+
+[data-theme="dark"] .card {
+    box-shadow: 0 2px 16px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .card:hover {
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .header-title-wrapper h1 {
+    background: linear-gradient(to right, #f1f5f9, #94a3b8);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+[data-theme="dark"] .form-select {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    color-scheme: dark;
+}
+
+[data-theme="dark"] .sync-status {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .vs-divider {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .btn-secondary {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+[data-theme="dark"] .btn-primary,
+[data-theme="dark"] .btn.btn-primary {
+    background-color: var(--primary);
+    color: #0a0e1a;
+}
+
+[data-theme="dark"] .theme-toggle-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .theme-toggle-btn:hover {
+    border-color: var(--primary);
+    color: var(--primary);
+    background: var(--primary-glow);
+}
+
+[data-theme="dark"] .card-header,
+[data-theme="dark"] .chart-header {
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .section-divider {
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .placeholder-card {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .stat-bar-bg {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .match-result-row:hover,
+[data-theme="dark"] tr:hover td {
+    background: rgba(255, 255, 255, 0.03);
+}
+
+[data-theme="dark"] thead th {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] tbody td {
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+[data-theme="dark"] .tab-btn {
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+[data-theme="dark"] {
+    --bg-select: rgba(255, 255, 255, 0.05);
+    --border-select: rgba(255, 255, 255, 0.1);
+    --bg-search: rgba(255, 255, 255, 0.04);
+}
+
+[data-theme="dark"] .custom-select-btn {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .custom-select-dropdown {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="dark"] .custom-select-option {
+    color: var(--text-primary);
+}
+
+[data-theme="dark"] .custom-select-option:hover {
+    background: rgba(56, 189, 248, 0.08);
+}
+
+[data-theme="dark"] .custom-select-option.selected {
+    background: rgba(56, 189, 248, 0.12);
+    color: var(--primary);
+}
+
+[data-theme="dark"] .avg-progress-value-text {
+    color: var(--text-primary);
+}
+
+/* Smooth theme transitions */
+*, *::before, *::after {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+}
+
 @media (max-width: 768px) {
     .controls-layout {
         grid-template-columns: 1fr;
@@ -1014,3 +1246,4 @@ body {
         grid-template-columns: 1fr;
     }
 }
+

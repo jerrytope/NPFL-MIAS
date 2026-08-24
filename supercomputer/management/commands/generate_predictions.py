@@ -47,23 +47,6 @@ class Command(BaseCommand):
         # Run predictions
         results = predict_all_fixtures(fixtures_to_predict, df)
 
-        # Apply 10% away-to-home/draw calibration
-        for r in results:
-            shift = min(10.0, r['away_win_pct'])
-            half = shift / 2
-            r['away_win_pct'] = round(r['away_win_pct'] - shift, 1)
-            r['home_win_pct'] = round(r['home_win_pct'] + half, 1)
-            r['draw_pct'] = round(r['draw_pct'] + half, 1)
-
-            total = r['home_win_pct'] + r['draw_pct'] + r['away_win_pct']
-            diff = round(100.0 - total, 1)
-            if abs(diff) > 0.01:
-                r['home_win_pct'] = round(r['home_win_pct'] + diff, 1)
-
-            pcts = {'HOME': r['home_win_pct'], 'DRAW': r['draw_pct'], 'AWAY': r['away_win_pct']}
-            r['predicted_result'] = max(pcts, key=pcts.get)
-            r['confidence'] = pcts[r['predicted_result']]
-
         created = 0
         updated = 0
         with transaction.atomic():
@@ -76,13 +59,12 @@ class Command(BaseCommand):
                         'away_win_pct': r['away_win_pct'],
                         'predicted_result': r['predicted_result'],
                         'confidence': r['confidence'],
-                        'home_form_score': r['home_form_score'],
-                        'away_form_score': r['away_form_score'],
-                        'h2h_home_rate': r['h2h_home_rate'],
-                        'h2h_draw_rate': r['h2h_draw_rate'],
-                        'h2h_away_rate': r['h2h_away_rate'],
-                        'home_venue_strength': r['home_venue_strength'],
-                        'away_venue_strength': r['away_venue_strength'],
+                        'home_lambda': r['home_lambda'],
+                        'away_lambda': r['away_lambda'],
+                        'home_attack': r['home_attack'],
+                        'home_defense': r['home_defense'],
+                        'away_attack': r['away_attack'],
+                        'away_defense': r['away_defense'],
                         'home_transfer_score': r.get('home_transfer_score', 0),
                         'away_transfer_score': r.get('away_transfer_score', 0),
                     },

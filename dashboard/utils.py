@@ -1,3 +1,4 @@
+import datetime
 import os
 import traceback
 from pathlib import Path
@@ -8,6 +9,37 @@ from django.core.cache import cache
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DOTENV_PATH = PROJECT_ROOT / '.env'
+
+# The results workbook's 'season' column has gone through two rounds of Excel
+# corruption: short codes like "02/03" were first misread as dates with no
+# year (e.g. "2026-02-03"), then a manual fix reformatted those dates back to
+# text but kept the stray "2026" year, producing "MM/26" labels instead of
+# the true season code. Row counts confirm these are the same 9 real
+# seasons, just mislabeled, so the remap is a straight lookup.
+SEASON_REMAP = {
+    '02/26': '02/03',
+    '03/26': '03/04',
+    '04/26': '04/05',
+    '07/26': '07/08',
+    '08/26': '08/09',
+    '09/26': '09/10',
+    '10/26': '10/11',
+    '11/26': '11/12',
+    '12/26': '12/13',
+}
+
+
+def normalize_season(value):
+    """
+    Normalize a raw 'season' cell from the results workbook to a clean
+    season code, undoing known Excel corruption patterns.
+    """
+    if isinstance(value, datetime.date):
+        # Covers datetime.date, datetime.datetime, and pd.Timestamp
+        return f"{value.month:02d}/{value.day:02d}"
+
+    text = str(value).strip()
+    return SEASON_REMAP.get(text, text)
 
 
 def load_dotenv(dotenv_path=None):
@@ -102,6 +134,75 @@ def get_unique_teams():
         return all_teams
     except Exception:
         return []
+
+def get_all_seasons():
+    """
+    Get a sorted list of all season codes present in the match data.
+    """
+    try:
+        df = get_npfl_data()
+        return sorted(df['season'].dropna().unique().tolist())
+    except Exception:
+        return []
+
+def get_team_home_away_splits(season=None):
+    """
+    Compute each team's real home/away Played/Win/Draw/Loss/Goals counts from
+    completed matches, plus season totals and points, optionally restricted
+    to a single season.
+    """
+    df = get_npfl_data()
+    df = df.dropna(subset=['home_goal', 'away_goal'])
+    if season:
+        df = df[df['season'] == season]
+
+    splits = []
+    for team in get_unique_teams():
+        home_df = df[df['home'] == team]
+        away_df = df[df['away'] == team]
+
+        home_win = int((home_df['home_goal'] > home_df['away_goal']).sum())
+        home_draw = int((home_df['home_goal'] == home_df['away_goal']).sum())
+        home_loss = int((home_df['home_goal'] < home_df['away_goal']).sum())
+        home_gf = int(home_df['home_goal'].sum())
+        home_ga = int(home_df['away_goal'].sum())
+
+        away_win = int((away_df['away_goal'] > away_df['home_goal']).sum())
+        away_draw = int((away_df['away_goal'] == away_df['home_goal']).sum())
+        away_loss = int((away_df['away_goal'] < away_df['home_goal']).sum())
+        away_gf = int(away_df['away_goal'].sum())
+        away_ga = int(away_df['home_goal'].sum())
+
+        total_win = home_win + away_win
+        total_draw = home_draw + away_draw
+        total_loss = home_loss + away_loss
+        total_gf = home_gf + away_gf
+        total_ga = home_ga + away_ga
+
+        splits.append({
+            'team': team,
+            'home_played': len(home_df),
+            'home_win': home_win,
+            'home_draw': home_draw,
+            'home_loss': home_loss,
+            'home_gf': home_gf,
+            'home_ga': home_ga,
+            'away_played': len(away_df),
+            'away_win': away_win,
+            'away_draw': away_draw,
+            'away_loss': away_loss,
+            'away_gf': away_gf,
+            'away_ga': away_ga,
+            'total_win': total_win,
+            'total_draw': total_draw,
+            'total_loss': total_loss,
+            'total_gf': total_gf,
+            'total_ga': total_ga,
+            'total_gd': total_gf - total_ga,
+            'points': total_win * 3 + total_draw,
+        })
+
+    return splits
 
 def determine_match_result(row, team):
     """

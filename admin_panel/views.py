@@ -10,12 +10,12 @@ from django.http import JsonResponse
 from django.shortcuts import render, get_object_or_404, redirect
 from django.views.decorators.http import require_POST, require_http_methods
 
-from dashboard.models import Team, TeamComparisonReport
-from dashboard.utils import get_npfl_data, perform_comparison, generate_expert_report
+from dashboard.models import Team, TeamComparisonReport, Match
+from dashboard.utils import get_npfl_data, perform_comparison, generate_expert_report, get_team_home_away_splits, get_all_seasons
 from dashboard.views import NPFL_CLUBS_2026_2027, canonical_team_pair
 from supercomputer.models import SeasonFixture, Prediction, MatchAnalysisReport
 from supercomputer.predictor import predict_all_fixtures
-from supercomputer.standings import calculate_standings
+from supercomputer.standings import calculate_standings, get_prediction_breakdown
 
 
 SEASON = '26/27'
@@ -52,14 +52,8 @@ def admin_logout(request):
 
 
 def _apply_calibration(results):
-    """Apply 10% away-win to home/draw calibration adjustment."""
+    """Ensure percentages sum to exactly 100.0%."""
     for r in results:
-        shift = min(10.0, r['away_win_pct'])
-        half = shift / 2
-        r['away_win_pct'] = round(r['away_win_pct'] - shift, 1)
-        r['home_win_pct'] = round(r['home_win_pct'] + half, 1)
-        r['draw_pct'] = round(r['draw_pct'] + half, 1)
-
         total = r['home_win_pct'] + r['draw_pct'] + r['away_win_pct']
         diff = round(100.0 - total, 1)
         if abs(diff) > 0.01:
@@ -257,13 +251,14 @@ def generate_predictions(request):
                     'away_win_pct': r['away_win_pct'],
                     'predicted_result': r['predicted_result'],
                     'confidence': r['confidence'],
-                    'home_form_score': r['home_form_score'],
-                    'away_form_score': r['away_form_score'],
-                    'h2h_home_rate': r['h2h_home_rate'],
-                    'h2h_draw_rate': r['h2h_draw_rate'],
-                    'h2h_away_rate': r['h2h_away_rate'],
-                    'home_venue_strength': r['home_venue_strength'],
-                    'away_venue_strength': r['away_venue_strength'],
+                    'home_lambda': r['home_lambda'],
+                    'away_lambda': r['away_lambda'],
+                    'home_attack': r['home_attack'],
+                    'home_defense': r['home_defense'],
+                    'away_attack': r['away_attack'],
+                    'away_defense': r['away_defense'],
+                    'home_transfer_score': r.get('home_transfer_score', 0),
+                    'away_transfer_score': r.get('away_transfer_score', 0),
                 },
             )
             if was_created:
@@ -271,11 +266,14 @@ def generate_predictions(request):
             else:
                 updated += 1
 
-    total_preds = Prediction.objects.filter(fixture__season=SEASON).count()
     all_preds = Prediction.objects.filter(fixture__season=SEASON)
-    home_wins = all_preds.filter(predicted_result='HOME').count()
-    draws = all_preds.filter(predicted_result='DRAW').count()
-    away_wins = all_preds.filter(predicted_result='AWAY').count()
+    total_preds = all_preds.count()
+    # Expected values (sum of each match's probability), not a count of how
+    # often that outcome is the single most-likely pick — see script.js's
+    # updateStats() for why that distinction matters in a home-dominant league.
+    home_wins = round(sum(p.home_win_pct for p in all_preds) / 100)
+    draws = round(sum(p.draw_pct for p in all_preds) / 100)
+    away_wins = round(sum(p.away_win_pct for p in all_preds) / 100)
 
     return JsonResponse({
         'message': f'Generated {created + updated} predictions ({created} new, {updated} updated)',
@@ -312,6 +310,68 @@ def fixtures(request):
         'season': SEASON,
     }
     return render(request, 'admin_panel/fixtures.html', context)
+
+
+@require_http_methods(["PUT", "POST"])
+@login_required
+def fixture_result_update(request, fixture_id):
+    """
+    API: record (or clear) a fixture's actual result. Mirrors the result into
+    a Match row so the prediction engine picks it up as real recent form on
+    the next regeneration — SeasonFixture itself is not read by predictor.py.
+    """
+    try:
+        body = json.loads(request.body) if request.body else request.POST
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    fixture = get_object_or_404(SeasonFixture.objects.select_related('home', 'away'), id=fixture_id)
+
+    home_goal_raw = body.get('home_goal')
+    away_goal_raw = body.get('away_goal')
+
+    match_query = {'season': fixture.season, 'home': fixture.home, 'away': fixture.away}
+
+    if home_goal_raw is None and away_goal_raw is None:
+        # Clear the result — the fixture reverts to "upcoming"
+        fixture.home_goal = None
+        fixture.away_goal = None
+        fixture.save(update_fields=['home_goal', 'away_goal'])
+        Match.objects.filter(**match_query).delete()
+        return JsonResponse({
+            'id': fixture.id, 'is_played': False, 'home_goal': None, 'away_goal': None,
+        })
+
+    if home_goal_raw is None or away_goal_raw is None:
+        return JsonResponse({'error': 'Both home_goal and away_goal are required (or both omitted to clear)'}, status=400)
+
+    try:
+        home_goal = int(home_goal_raw)
+        away_goal = int(away_goal_raw)
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'Scores must be integers'}, status=400)
+
+    if home_goal < 0 or away_goal < 0:
+        return JsonResponse({'error': 'Scores cannot be negative'}, status=400)
+
+    with transaction.atomic():
+        fixture.home_goal = home_goal
+        fixture.away_goal = away_goal
+        fixture.save(update_fields=['home_goal', 'away_goal'])
+
+        Match.objects.update_or_create(
+            **match_query,
+            defaults={
+                'match_name': f'{fixture.home.name} vs {fixture.away.name}',
+                'home_goal': home_goal,
+                'away_goal': away_goal,
+                'source': 'admin_entry',
+            },
+        )
+
+    return JsonResponse({
+        'id': fixture.id, 'is_played': True, 'home_goal': home_goal, 'away_goal': away_goal,
+    })
 
 
 @require_POST
@@ -593,4 +653,49 @@ def standings(request):
         'standings': standings_data,
         'all_match_days': all_match_days,
         'selected_md': max_match_day,
+    })
+
+
+@login_required
+def team_splits(request):
+    """Real home/away Played/Win/Draw/Loss breakdown per team, from completed matches."""
+    season = request.GET.get('season') or None
+    splits = get_team_home_away_splits(season=season)
+    return render(request, 'admin_panel/team_splits.html', {
+        'splits': splits,
+        'all_seasons': get_all_seasons(),
+        'selected_season': season,
+    })
+
+
+@login_required
+def prediction_breakdown(request):
+    """Per-team expected home/away W/D/L, with each fixture's opponent and
+    the model's per-match favorite (win/draw/loss) grouped for browsing."""
+    breakdown = get_prediction_breakdown(SEASON)
+
+    for row in breakdown:
+        fixtures = (
+            [dict(f, venue='H') for f in row['home_fixtures']]
+            + [dict(f, venue='A') for f in row['away_fixtures']]
+        )
+        fixtures.sort(key=lambda f: f['match_day'])
+
+        likely_wins, likely_draws, likely_losses = [], [], []
+        for f in fixtures:
+            best = max(f['win_pct'], f['draw_pct'], f['loss_pct'])
+            if f['win_pct'] == best:
+                likely_wins.append(f)
+            elif f['draw_pct'] == best:
+                likely_draws.append(f)
+            else:
+                likely_losses.append(f)
+
+        row['likely_wins'] = likely_wins
+        row['likely_draws'] = likely_draws
+        row['likely_losses'] = likely_losses
+
+    return render(request, 'admin_panel/prediction_breakdown.html', {
+        'breakdown': breakdown,
+        'season': SEASON,
     })

@@ -449,6 +449,10 @@ body {
 }
 
 select.form-control { appearance: auto; }
+select.form-control option {
+    background-color: #1e293b;
+    color: #f1f5f9;
+}
 
 textarea.form-control { resize: vertical; min-height: 120px; }
 
@@ -643,3 +647,213 @@ textarea.form-control { resize: vertical; min-height: 120px; }
     .admin-main { margin-left: 60px; }
     .admin-content { padding: 16px; }
 }
+
+/* ==========================================================================
+   Theme Toggle Button — admin panel
+   ========================================================================== */
+
+.theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: var(--font);
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-muted);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.theme-toggle-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: rgba(56, 189, 248, 0.08);
+}
+
+.theme-toggle-btn i {
+    font-size: 11px;
+    transition: transform 0.3s ease;
+}
+
+.theme-toggle-btn:hover i {
+    transform: rotate(20deg);
+}
+
+/* ==========================================================================
+   Light Mode Overrides — Admin Panel
+   (Admin panel is dark by default; light mode is the override)
+   ========================================================================== */
+
+[data-theme="light"] {
+    --color-bg: #f8fafc;
+    --color-sidebar: #ffffff;
+    --color-sidebar-hover: #f1f5f9;
+    --color-sidebar-active: #0ea5e9;
+    --color-white: #ffffff;
+    --color-card: rgba(255, 255, 255, 0.95);
+    --color-text: #111827;
+    --color-text-muted: #64748b;
+    --color-border: rgba(0, 0, 0, 0.08);
+    --color-primary: #0ea5e9;
+    --color-primary-hover: #0284c7;
+    --color-success: #059669;
+    --color-warning: #d97706;
+    --color-danger: #e11d48;
+    --color-info: #7c3aed;
+    --glass-bg: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(14, 165, 233, 0.15);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+    --shadow-md: 0 4px 8px rgba(0,0,0,0.1);
+    --shadow-lg: 0 10px 25px rgba(0,0,0,0.12);
+}
+
+[data-theme="light"] body {
+    background: var(--color-bg);
+    background-image:
+        radial-gradient(at 10% 20%, rgba(14, 165, 233, 0.04) 0px, transparent 50%),
+        radial-gradient(at 90% 80%, rgba(124, 58, 237, 0.02) 0px, transparent 50%);
+}
+
+[data-theme="light"] .admin-sidebar {
+    background: var(--color-sidebar);
+    border-right-color: var(--color-border);
+}
+
+[data-theme="light"] .sidebar-brand {
+    border-bottom-color: var(--color-border);
+    color: #111827;
+}
+
+[data-theme="light"] .nav-link {
+    color: #4b5563;
+}
+
+[data-theme="light"] .nav-link:hover {
+    background: var(--color-sidebar-hover);
+    color: #111827;
+}
+
+[data-theme="light"] .nav-link.active {
+    background: rgba(14, 165, 233, 0.08);
+    color: var(--color-sidebar-active);
+    border-color: rgba(14, 165, 233, 0.2);
+}
+
+[data-theme="light"] .admin-header {
+    background: rgba(255, 255, 255, 0.9);
+    border-bottom-color: var(--color-border);
+}
+
+[data-theme="light"] .admin-content {
+    background: transparent;
+}
+
+[data-theme="light"] .stat-card {
+    background: var(--color-card);
+    border-color: var(--color-border);
+    box-shadow: var(--shadow-sm);
+}
+
+[data-theme="light"] .data-table-wrapper {
+    background: var(--color-card);
+    border-color: var(--color-border);
+}
+
+[data-theme="light"] .data-table thead th {
+    background: rgba(0, 0, 0, 0.02);
+    color: #64748b;
+    border-bottom-color: var(--color-border);
+}
+
+[data-theme="light"] .data-table tbody td {
+    color: #111827;
+    border-bottom-color: var(--color-border);
+}
+
+[data-theme="light"] .data-table tbody tr:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+[data-theme="light"] .modal-box {
+    background: #ffffff;
+    border-color: var(--color-border);
+}
+
+[data-theme="light"] .modal-header {
+    border-bottom-color: var(--color-border);
+}
+
+[data-theme="light"] .modal-footer {
+    border-top-color: var(--color-border);
+}
+
+[data-theme="light"] .form-control {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.12);
+    color: #111827;
+}
+
+[data-theme="light"] .form-control:focus {
+    background: #ffffff;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.1);
+}
+
+[data-theme="light"] select.form-control option {
+    background-color: #ffffff;
+    color: #111827;
+}
+
+[data-theme="light"] .inline-input {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.12);
+    color: #111827;
+}
+
+[data-theme="light"] .btn-outline {
+    border-color: var(--color-border);
+    color: #374151;
+}
+
+[data-theme="light"] .btn-outline:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+}
+
+[data-theme="light"] .theme-toggle-btn {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.1);
+    color: #64748b;
+}
+
+[data-theme="light"] .theme-toggle-btn:hover {
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+    background: rgba(14, 165, 233, 0.08);
+}
+
+[data-theme="light"] .nav-divider {
+    background: var(--color-border);
+}
+
+[data-theme="light"] .section-header h3,
+[data-theme="light"] .modal-header h3 {
+    color: #111827;
+}
+
+[data-theme="light"] .badge-home { background: rgba(5, 150, 105, 0.1); color: #059669; }
+[data-theme="light"] .badge-draw { background: rgba(217, 119, 6, 0.1); color: #d97706; }
+[data-theme="light"] .badge-away { background: rgba(225, 29, 72, 0.1); color: #e11d48; }
+
+/* Smooth theme transitions */
+*, *::before, *::after {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease,
+                box-shadow 0.2s ease;
+}
+

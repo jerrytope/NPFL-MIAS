@@ -35,12 +35,11 @@ document.addEventListener('DOMContentLoaded', () => {
         'abia warriors': 'abia warriors.webp',
         'rangers international': 'rangers international.webp',
         'shooting stars': 'shooting stars.webp',
-        'rangers international': 'rangers international.webp',
+        'ranchers bees': 'Ranchers Bees.png',
         'barau': 'barau.webp',
         'bendel insurance': 'bendel insurance.webp',
-        'doma united': 'doma united.webp',
-        'enugu rangers': 'enugu rangers.webp',
-        'inter lagos': 'inter lagos.webp',
+        'doma united': 'doma united.png',
+        'inter lagos': 'inter lagos.png',
         'kano pillars': 'kano pillars.webp',
         'katsina united': 'katsina united.webp',
         'kun khalifat': 'kun khalifat.webp',
@@ -48,12 +47,13 @@ document.addEventListener('DOMContentLoaded', () => {
         'nasarawa united': 'nasarawa united.webp',
         'niger tornadoes': 'niger tornadoes.webp',
         'plateau united': 'plateau united.webp',
-        'ranchers bees': 'ranchers bees.webp',
         'rivers united': 'rivers united.webp',
         'shooting stars': 'shooting stars.webp',
-        'sporting lagos': 'sporting lagos.webp',
+        'sporting lagos': 'sporting lagos.png',
         'warri wolves': 'warri wolves.webp',
         'ikorodu city': 'ikorodu city.webp',
+        "enyimba": "enyimba.webp",
+
 
     };
 
@@ -771,3 +771,41 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 });
+
+/* ==========================================================================
+   Admin-only PNG downloads (chart cards / table screenshots)
+   Deliberately defined OUTSIDE the DOMContentLoaded closure above, so the
+   onclick="" attributes on the download buttons (dashboard/index.html) —
+   which run in global scope — can call it directly.
+   ========================================================================== */
+function downloadElementAsPNG(elementId, filenamePrefix) {
+    const element = document.getElementById(elementId);
+    if (!element || typeof html2canvas === 'undefined') return;
+
+    const t1El = document.getElementById('t1Name');
+    const t2El = document.getElementById('t2Name');
+    const slugify = (s) => s.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
+    const teamsPart = (t1El && t2El) ? `${slugify(t1El.innerText)}-vs-${slugify(t2El.innerText)}-` : '';
+
+    // backgroundColor: '#ffffff' — always a solid white background, regardless
+    // of the current theme (dark mode) or the card's own semi-transparent
+    // "glassmorphic" background, which html2canvas can't reproduce anyway
+    // (it doesn't support backdrop-filter blur).
+    // useCORS: true — lets html2canvas load cross-origin assets (Google Fonts)
+    // with proper CORS instead of tainting the canvas, which silently breaks
+    // canvas.toDataURL() in Chrome specifically.
+    html2canvas(element, { backgroundColor: '#ffffff', scale: 2, useCORS: true }).then(canvas => {
+        const link = document.createElement('a');
+        link.download = `${teamsPart}${filenamePrefix}.png`;
+        link.href = canvas.toDataURL('image/png');
+        // Chrome requires the anchor to actually be in the DOM for a
+        // programmatic .click() + download attribute to reliably trigger —
+        // it's removed again right after.
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+    }).catch(err => {
+        console.error('Failed to generate download image:', err);
+        alert('Could not generate the download image. Please try again.');
+    });
+}

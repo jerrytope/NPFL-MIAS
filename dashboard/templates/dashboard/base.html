@@ -16,9 +16,14 @@
     
     <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    
+
+    <!-- html2canvas: powers the admin-only "Download PNG" buttons on charts/tables -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{% static 'dashboard/style.css' %}">
+    <!-- Theme toggle (loaded early to prevent flash) -->
+    <script src="{% static 'theme.js' %}"></script>
 </head>
 <body>
     <div class="app-container">

@@ -5,7 +5,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NPFL Super Computer — Predicted Standings</title>
+    <title>NPFL Super Computer — League Standings</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,20 +14,90 @@
         rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{% static 'supercomputer/style.css' %}">
+    <!-- Theme toggle (loaded early to prevent flash) -->
+    <script src="{% static 'theme.js' %}"></script>
 
     <style>
-        .standings-card {
-            background: rgba(248, 249, 252, 0.98);
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+        /* Tabs Section */
+        .tabs-section {
+            display: flex;
+            flex-direction: column;
+            gap: 1.25rem;
             margin-top: 24px;
+        }
+
+        .tabs-header {
+            display: flex;
+            gap: 0.5rem;
+            border-bottom: 1px solid var(--stnds-border, rgba(0, 0, 0, 0.08));
+            padding-bottom: 1px;
+            overflow-x: auto;
+        }
+
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--stnds-text-secondary, #4b5563);
+            font-family: 'Inter', sans-serif;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            padding: 0.875rem 1.25rem;
+            cursor: pointer;
+            position: relative;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--stnds-text-primary, #111827);
+        }
+
+        .tab-btn.active {
+            color: var(--accent-blue, #0ea5e9);
+        }
+
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: var(--accent-blue, #0ea5e9);
+            box-shadow: 0 0 8px rgba(14, 165, 233, 0.5);
+        }
+
+        .tab-pane {
+            display: none;
+        }
+
+        .tab-pane.active {
+            display: block;
+            animation: fadeIn 0.2s ease-in-out;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Standings Cards & Tables */
+        .standings-card {
+            background: var(--stnds-card-bg, rgba(248, 249, 252, 0.98));
+            border: 1px solid var(--stnds-border, rgba(0, 0, 0, 0.08));
+            border-radius: 16px;
+            overflow-x: auto;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+            margin-top: 16px;
         }
 
         .standings-table {
             width: 100%;
             border-collapse: collapse;
+            min-width: 680px;
         }
 
         .standings-table thead th {
@@ -36,10 +106,11 @@
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            color: #4b5563;
-            background: rgba(0, 0, 0, 0.02);
+            color: var(--stnds-text-secondary, #4b5563);
+            background: var(--stnds-thead-bg, rgba(0, 0, 0, 0.03));
             text-align: center;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+            border-bottom: 1px solid var(--stnds-border, rgba(0, 0, 0, 0.08));
+            white-space: nowrap;
         }
 
         .standings-table thead th:nth-child(2) {
@@ -49,9 +120,10 @@
         .standings-table tbody td {
             padding: 12px 16px;
             font-size: 14px;
-            color: #111827;
+            color: var(--stnds-text-primary, #111827);
             text-align: center;
-            border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+            border-bottom: 1px solid var(--stnds-row-border, rgba(0, 0, 0, 0.04));
+            white-space: nowrap;
         }
 
         .standings-table tbody td:nth-child(2) {
@@ -70,12 +142,10 @@
         .pos-cell {
             font-weight: 700;
             font-family: 'Orbitron', monospace;
-            width: 50px;
+            width: 44px;
         }
 
-        .pos-1,
-        .pos-2,
-        .pos-3 {
+        .pos-top3 {
             color: #0ea5e9;
         }
 
@@ -86,56 +156,95 @@
         .pts-cell {
             font-weight: 800;
             font-family: 'Orbitron', monospace;
-            font-size: 16px;
-            color: #0ea5e9;
+            font-size: 15px;
+            color: var(--accent-blue, #0ea5e9);
         }
 
-        .standings-header {
+        .range-badge {
+            font-size: 12px;
+            color: var(--stnds-muted, #6b7280);
+            background: var(--stnds-badge-bg, rgba(0, 0, 0, 0.04));
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .prob-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .prob-pill.title {
+            background: rgba(14, 165, 233, 0.12);
+            color: #0284c7;
+            border: 1px solid rgba(14, 165, 233, 0.3);
+        }
+
+        .prob-pill.top3 {
+            background: rgba(5, 150, 105, 0.1);
+            color: #059669;
+            border: 1px solid rgba(5, 150, 105, 0.25);
+        }
+
+        .prob-pill.relegation {
+            background: rgba(225, 29, 72, 0.1);
+            color: #e11d48;
+            border: 1px solid rgba(225, 29, 72, 0.25);
+        }
+
+        .prob-pill.zero {
+            color: #9ca3af;
+            font-weight: 500;
+        }
+
+        /* Simulation Controls Header */
+        .sim-action-bar {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            margin-top: 32px;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-top: 10px;
+            padding: 16px 20px;
+            background: var(--stnds-card-bg, rgba(248, 249, 252, 0.98));
+            border: 1px solid var(--stnds-border, rgba(0, 0, 0, 0.08));
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         }
 
-        .standings-header h2 {
-            font-size: 20px;
+        .sim-action-bar .sim-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .sim-action-bar .sim-info h3 {
+            font-size: 15px;
             font-weight: 700;
-            color: #111827;
+            color: var(--stnds-text-primary, #111827);
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 8px;
         }
 
-        .standings-header h2 i {
-            color: #0ea5e9;
-        }
-
-        .back-to-predictions {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            text-decoration: none;
-            color: #4b5563;
-            font-size: 13px;
-            font-weight: 500;
-            padding: 8px 14px;
-            border-radius: 8px;
-            border: 1px solid rgba(0, 0, 0, 0.08);
-            transition: all 0.2s;
-        }
-
-        .back-to-predictions:hover {
-            color: #0ea5e9;
-            border-color: rgba(14, 165, 233, 0.3);
-            background: rgba(14, 165, 233, 0.05);
+        .sim-action-bar .sim-info p {
+            font-size: 12px;
+            color: var(--stnds-muted, #6b7280);
+            margin: 0;
         }
 
         .zone-legend {
             display: flex;
             gap: 20px;
-            margin-top: 16px;
+            flex-wrap: wrap;
+            margin-top: 14px;
             font-size: 12px;
-            color: #4b5563;
+            color: var(--stnds-text-secondary, #4b5563);
         }
 
         .zone-legend span {
@@ -164,29 +273,29 @@
             align-items: center;
             gap: 12px;
             flex-wrap: wrap;
-            margin-top: 20px;
-            padding: 16px 20px;
-            background: rgba(248, 249, 252, 0.98);
-            border: 1px solid rgba(0, 0, 0, 0.08);
+            margin-top: 10px;
+            padding: 14px 18px;
+            background: var(--stnds-card-bg, rgba(248, 249, 252, 0.98));
+            border: 1px solid var(--stnds-border, rgba(0, 0, 0, 0.08));
             border-radius: 12px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         }
 
         .md-filter label {
             font-size: 13px;
             font-weight: 600;
-            color: #4b5563;
+            color: var(--stnds-text-secondary, #4b5563);
             white-space: nowrap;
         }
 
         .md-filter select {
             padding: 8px 12px;
             border-radius: 8px;
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            background: #ffffff;
-            color: #111827;
+            border: 1px solid var(--stnds-border, rgba(0, 0, 0, 0.1));
+            background: var(--stnds-select-bg, #ffffff);
+            color: var(--stnds-text-primary, #111827);
             font-size: 13px;
-            font-family: var(--font-body, 'Inter', sans-serif);
+            font-family: 'Inter', sans-serif;
             cursor: pointer;
             min-width: 180px;
         }
@@ -209,6 +318,83 @@
             font-size: 12px;
             font-weight: 600;
         }
+
+        /* Toast notification */
+        .toast-notify {
+            display: none;
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            background: var(--stnds-toast-bg, #111827);
+            color: #ffffff;
+            font-size: 13px;
+            font-weight: 500;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        /* ======================================================
+           Dark Mode — Standings page inline overrides
+           ====================================================== */
+        [data-theme="dark"] {
+            --stnds-card-bg: rgba(17, 24, 39, 0.85);
+            --stnds-border: rgba(255, 255, 255, 0.07);
+            --stnds-row-border: rgba(255, 255, 255, 0.04);
+            --stnds-thead-bg: rgba(255, 255, 255, 0.03);
+            --stnds-text-primary: #f1f5f9;
+            --stnds-text-secondary: #94a3b8;
+            --stnds-muted: #475569;
+            --stnds-badge-bg: rgba(255, 255, 255, 0.06);
+            --stnds-select-bg: rgba(255, 255, 255, 0.05);
+            --stnds-toast-bg: #1e293b;
+        }
+
+        [data-theme="dark"] .standings-table tbody tr:hover {
+            background: rgba(56, 189, 248, 0.05);
+        }
+
+        [data-theme="dark"] .standings-card {
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
+        }
+
+        [data-theme="dark"] .sim-action-bar {
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+        }
+
+        [data-theme="dark"] .md-filter select {
+            color-scheme: dark;
+        }
+
+        [data-theme="dark"] .prob-pill.title {
+            background: rgba(56, 189, 248, 0.12);
+            color: #38bdf8;
+            border-color: rgba(56, 189, 248, 0.3);
+        }
+
+        [data-theme="dark"] .prob-pill.top3 {
+            background: rgba(52, 211, 153, 0.1);
+            color: #34d399;
+            border-color: rgba(52, 211, 153, 0.25);
+        }
+
+        [data-theme="dark"] .prob-pill.relegation {
+            background: rgba(251, 113, 133, 0.1);
+            color: #fb7185;
+            border-color: rgba(251, 113, 133, 0.25);
+        }
+
+        /* Smooth transitions for this page */
+        *, *::before, *::after {
+            transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+        }
     </style>
 </head>
 
@@ -226,77 +412,193 @@
                     <div class="title-block">
                         <h1 class="sc-title">
                             <i class="fas fa-trophy"></i>
-                            Predicted Standings
+                            NPFL Super Computer Standings
                         </h1>
-                        <p class="sc-subtitle">Based on AI predictions — 2026/27 Season</p>
+                        <p class="sc-subtitle">2026/27 Season Standings &amp; 100,000-Run Monte Carlo Projections</p>
                     </div>
+                </div>
+                <!-- Theme toggle -->
+                <div class="header-right" style="display:flex; gap:10px; align-items:center;">
+                    <button class="theme-toggle-btn" id="themeToggle" title="Switch to dark mode">
+                        <i class="fas fa-moon"></i>
+                        <span class="theme-label">Dark</span>
+                    </button>
                 </div>
             </div>
         </header>
 
-        <!-- Standings Info -->
-        <div class="standings-header">
-            <h2><i class="fas fa-table-list"></i> League Table</h2>
-        </div>
+        <!-- Tabs Navigation -->
+        <div class="tabs-section">
+            <div class="tabs-header">
+                <button class="tab-btn active" onclick="switchTab('tabPredicted', this)">
+                    <i class="fas fa-list-ol"></i> Predicted Standings (Expected Points)
+                </button>
+                <button class="tab-btn" onclick="switchTab('tabSimulation', this)">
+                    <i class="fas fa-dice"></i> 100,000 Monte Carlo Simulations (Probabilistic)
+                </button>
+            </div>
 
-        <!-- Match Day Filter -->
-        <form class="md-filter" method="get" action="/supercomputer/standings/">
-            <label for="mdSelect"><i class="fas fa-calendar-alt"></i> Show standings after:</label>
-            <select id="mdSelect" name="match_day" onchange="this.form.submit()">
-                <option value="">All Match Days (Full Season)</option>
-                {% for md in all_match_days %}
-                <option value="{{ md }}" {% if selected_md == md %}selected{% endif %}>Match Day {{ md }}</option>
-                {% endfor %}
-            </select>
-            {% if selected_md %}
-            <span class="md-badge"><i class="fas fa-filter"></i> MD 1–{{ selected_md }}</span>
-            {% endif %}
-        </form>
+            <!-- Tab 1: Predicted Standings (Based on match predictions) -->
+            <div class="tab-pane active" id="tabPredicted">
+                <!-- Match Day Filter -->
+                <form class="md-filter" method="get" action="/supercomputer/standings/">
+                    <label for="mdSelect"><i class="fas fa-calendar-alt"></i> Show Standings After:</label>
+                    <select id="mdSelect" name="match_day" onchange="this.form.submit()">
+                        <option value="">Full Season (All 38 Match Days)</option>
+                        {% for md in all_match_days %}
+                        <option value="{{ md }}" {% if selected_md == md %}selected{% endif %}>Match Day {{ md }}</option>
+                        {% endfor %}
+                    </select>
+                    {% if selected_md %}
+                    <span class="md-badge"><i class="fas fa-filter"></i> MD 1–{{ selected_md }}</span>
+                    <a href="/supercomputer/standings/" style="font-size:12px; color:#0ea5e9; text-decoration:none; margin-left:auto;">Reset to Full Season</a>
+                    {% endif %}
+                </form>
 
-        <div class="zone-legend">
-            <span><span class="zone-dot champion"></span> Top 3 (Champions zone)</span>
-            <span><span class="zone-dot relegation"></span> Bottom 3 (Relegation zone)</span>
-        </div>
+                <div class="zone-legend">
+                    <span><span class="zone-dot champion"></span> Top 3 (Champions &amp; Continental CAF zone)</span>
+                    <span><span class="zone-dot relegation"></span> Bottom 4 (Relegation zone — Positions 17 to 20)</span>
+                </div>
 
-        {% if standings %}
-        <div class="standings-card">
-            <table class="standings-table">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Team</th>
-                        <th>P</th>
-                        <th>W</th>
-                        <th>D</th>
-                        <th>L</th>
-                        <th>Pts</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in standings %}
-                    <tr>
-                        <td
-                            class="pos-cell {% if row.position <= 3 %}pos-1{% elif row.position > 14 %}pos-relegation{% endif %}">
-                            {{ row.position }}</td>
-                        <td>{{ row.team }}</td>
-                        <td>{{ row.played }}</td>
-                        <td>{{ row.won }}</td>
-                        <td>{{ row.drawn }}</td>
-                        <td>{{ row.lost }}</td>
-                        <td class="pts-cell">{{ row.points }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                {% if standings %}
+                <div class="standings-card">
+                    <table class="standings-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Team</th>
+                                <th>P</th>
+                                <th>xW</th>
+                                <th>xD</th>
+                                <th>xL</th>
+                                <th>xPts</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in standings %}
+                            <tr>
+                                <td class="pos-cell {% if row.position <= 3 %}pos-top3{% elif row.position > 16 %}pos-relegation{% endif %}">
+                                    {{ row.position }}
+                                </td>
+                                <td><strong>{{ row.team }}</strong></td>
+                                <td>{{ row.played }}</td>
+                                <td>{{ row.won|floatformat:0 }}</td>
+                                <td>{{ row.drawn|floatformat:0 }}</td>
+                                <td>{{ row.lost|floatformat:0 }}</td>
+                                <td class="pts-cell">{{ row.points|floatformat:0 }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state" style="margin-top:40px; text-align:center; padding:40px;">
+                    <i class="fas fa-trophy" style="font-size:32px; color:#9ca3af; margin-bottom:12px;"></i>
+                    <h3>No prediction data available</h3>
+                    <p style="color:#6b7280; margin-top:8px;">Run `python manage.py generate_predictions` to generate the deterministic standings.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Tab 2: 100,000 Monte Carlo Simulation Standings -->
+            <div class="tab-pane" id="tabSimulation">
+                <!-- Info bar — simulations are run from the terminal only (manage.py run_simulation) -->
+                <div class="sim-action-bar">
+                    <div class="sim-info">
+                        <h3><i class="fas fa-microchip" style="color:#0ea5e9;"></i> Monte Carlo Engine</h3>
+                        <p>Simulates 100,000 full seasons (38,000,000 simulated matches) with exact Poisson scorelines, dynamic momentum, and NPFL tie-breakers. Run via <code>python manage.py run_simulation</code> in the terminal — refresh this page after it completes to see updated results.</p>
+                    </div>
+                </div>
+
+                <div class="zone-legend">
+                    <span><span class="zone-dot champion"></span> Top 3 (Champions &amp; Continental CAF zone)</span>
+                    <span><span class="zone-dot relegation"></span> Bottom 4 (Relegation danger — Positions 17 to 20)</span>
+                </div>
+
+                {% if projections %}
+                <div class="standings-card" id="projectionsCard">
+                    <table class="standings-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Team</th>
+                                <th>xPts</th>
+                                <th>Projected Range</th>
+                                <th>Title %</th>
+                                <th>Top 3 %</th>
+                                <th>Relegation %</th>
+                                <th>Avg GD</th>
+                            </tr>
+                        </thead>
+                        <tbody id="projectionsBody">
+                            {% for row in projections %}
+                            <tr>
+                                <td class="pos-cell {% if forloop.counter <= 3 %}pos-top3{% elif forloop.counter > 16 %}pos-relegation{% endif %}">
+                                    {{ forloop.counter }}
+                                </td>
+                                <td><strong>{{ row.team.name }}</strong></td>
+                                <td class="pts-cell">{{ row.expected_points|floatformat:1 }}</td>
+                                <td><span class="range-badge">{{ row.worst_points }} – {{ row.best_points }} pts</span></td>
+                                <td>
+                                    {% if row.title_pct > 0 %}
+                                    <span class="prob-pill title"><i class="fas fa-crown"></i> {{ row.title_pct|floatformat:1 }}%</span>
+                                    {% else %}
+                                    <span class="prob-pill zero">&lt; 0.1%</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if row.top3_pct > 0 %}
+                                    <span class="prob-pill top3">{{ row.top3_pct|floatformat:1 }}%</span>
+                                    {% else %}
+                                    <span class="prob-pill zero">&lt; 0.1%</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if row.relegation_pct > 0 %}
+                                    <span class="prob-pill relegation"><i class="fas fa-triangle-exclamation"></i> {{ row.relegation_pct|floatformat:1 }}%</span>
+                                    {% else %}
+                                    <span class="prob-pill zero">&lt; 0.1%</span>
+                                    {% endif %}
+                                </td>
+                                <td style="color:#4b5563; font-weight:600;">
+                                    {% if row.avg_goal_diff > 0 %}+{{ row.avg_goal_diff|floatformat:1 }}{% else %}{{ row.avg_goal_diff|floatformat:1 }}{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state" style="margin-top:40px; text-align:center; padding:40px;">
+                    <i class="fas fa-dice" style="font-size:32px; color:#9ca3af; margin-bottom:12px;"></i>
+                    <h3>No simulation data available yet</h3>
+                    <p style="color:#6b7280; margin-top:8px;">Run <code>python manage.py run_simulation</code> in the terminal to generate the full probabilistic table.</p>
+                </div>
+                {% endif %}
+            </div>
         </div>
-        {% else %}
-        <div class="empty-state" style="margin-top:40px;">
-            <i class="fas fa-trophy"></i>
-            <h3>No predictions yet</h3>
-            <p>Generate predictions first to see the standings.</p>
-        </div>
-        {% endif %}
     </div>
+
+    <div class="toast-notify" id="toastNotify"></div>
+
+    <script>
+        function switchTab(tabId, btn) {
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+
+            const targetPane = document.getElementById(tabId);
+            if (targetPane) targetPane.classList.add('active');
+            if (btn) btn.classList.add('active');
+        }
+
+        function showToast(msg, duration = 3000) {
+            const toast = document.getElementById('toastNotify');
+            toast.textContent = msg;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, duration);
+        }
+
+    </script>
 </body>
 
 </html>

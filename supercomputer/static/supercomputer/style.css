@@ -2,6 +2,23 @@
    NPFL Super Computer — Premium Dark Futuristic UI
    ============================================================ */
 
+.reveal-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    margin-bottom: 16px;
+    border-radius: var(--radius-sm);
+    background: rgba(14, 165, 233, 0.08);
+    border: 1px solid rgba(14, 165, 233, 0.2);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+}
+
+.reveal-status i {
+    color: var(--accent-blue);
+}
+
 /* ---------- Reset & Base ---------- */
 *,
 *::before,
@@ -539,6 +556,24 @@ body {
     border: 1px solid rgba(248, 113, 113, 0.3);
 }
 
+.result-badge.team-win {
+    background: rgba(52, 211, 153, 0.15);
+    color: var(--home-color);
+    border: 1px solid rgba(52, 211, 153, 0.3);
+}
+
+.result-badge.team-draw {
+    background: rgba(251, 191, 36, 0.15);
+    color: var(--draw-color);
+    border: 1px solid rgba(251, 191, 36, 0.3);
+}
+
+.result-badge.team-loss {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--away-color);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+}
+
 .confidence-meter {
     font-size: 0.8rem;
     color: var(--text-secondary);
@@ -718,7 +753,7 @@ body {
     padding: 8px 12px;
     border: 1px solid var(--glass-border);
     border-radius: var(--radius-sm);
-    background: rgba(15, 23, 42, 0.8);
+    background: var(--modal-input-bg, rgba(0, 0, 0, 0.04));
     color: var(--text-primary);
     font-family: var(--font-body);
     font-size: 0.9rem;
@@ -821,4 +856,141 @@ body {
     .card-breakdown {
         grid-template-columns: 1fr;
     }
+}
+
+/* ==========================================================================
+   Theme Toggle Button — supercomputer section
+   ========================================================================== */
+
+.theme-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    font-family: var(--font-body);
+    cursor: pointer;
+    border: 1px solid var(--glass-border);
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+
+.theme-toggle-btn:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    background: rgba(14, 165, 233, 0.1);
+}
+
+.theme-toggle-btn i {
+    font-size: 0.8rem;
+    transition: transform 0.3s ease;
+}
+
+.theme-toggle-btn:hover i {
+    transform: rotate(20deg);
+}
+
+/* ==========================================================================
+   Dark Mode — Supercomputer
+   ========================================================================== */
+
+[data-theme="dark"] {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #0d1117;
+    --bg-card: rgba(17, 24, 39, 0.85);
+    --border-glow: rgba(56, 189, 248, 0.2);
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #475569;
+    --accent-blue: #38bdf8;
+    --accent-green: #34d399;
+    --accent-amber: #fbbf24;
+    --accent-red: #fb7185;
+    --accent-purple: #a78bfa;
+    --home-color: #34d399;
+    --draw-color: #fbbf24;
+    --away-color: #fb7185;
+    --glass-bg: rgba(15, 23, 42, 0.8);
+    --glass-border: rgba(56, 189, 248, 0.15);
+    --modal-input-bg: rgba(15, 23, 42, 0.8);
+}
+
+[data-theme="dark"] body {
+    background: var(--bg-primary);
+}
+
+[data-theme="dark"] .bg-grid {
+    background-image:
+        linear-gradient(rgba(56, 189, 248, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(56, 189, 248, 0.04) 1px, transparent 1px);
+}
+
+[data-theme="dark"] .sc-header {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .filter-bar {
+    background: rgba(17, 24, 39, 0.7);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .filter-group select,
+[data-theme="dark"] select {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-primary);
+    color-scheme: dark;
+}
+
+[data-theme="dark"] .prediction-card {
+    background: var(--bg-card);
+    border-color: var(--glass-border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .prediction-card:hover {
+    border-color: rgba(56, 189, 248, 0.3);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.06);
+}
+
+[data-theme="dark"] .card-header {
+    border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .card-footer {
+    border-top-color: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+}
+
+[data-theme="dark"] .stats-banner {
+    background: rgba(17, 24, 39, 0.7);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .stat-card {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .theme-toggle-btn {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
+}
+
+[data-theme="dark"] .theme-toggle-btn:hover {
+    border-color: var(--accent-blue);
+    color: var(--accent-blue);
+    background: rgba(56, 189, 248, 0.1);
+}
+
+/* Smooth theme transitions */
+*, *::before, *::after {
+    transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease,
+                box-shadow 0.2s ease;
 }

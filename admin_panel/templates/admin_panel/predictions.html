@@ -35,21 +35,21 @@
         <div class="stat-icon green"><i class="fas fa-home"></i></div>
         <div>
             <div class="stat-value" id="statHome">0</div>
-            <div class="stat-label">Home Wins</div>
+            <div class="stat-label">Expected Home Wins</div>
         </div>
     </div>
     <div class="stat-card">
         <div class="stat-icon amber"><i class="fas fa-handshake"></i></div>
         <div>
             <div class="stat-value" id="statDraw">0</div>
-            <div class="stat-label">Draws</div>
+            <div class="stat-label">Expected Draws</div>
         </div>
     </div>
     <div class="stat-card">
         <div class="stat-icon purple"><i class="fas fa-plane"></i></div>
         <div>
             <div class="stat-value" id="statAway">0</div>
-            <div class="stat-label">Away Wins</div>
+            <div class="stat-label">Expected Away Wins</div>
         </div>
     </div>
 </div>
@@ -92,7 +92,7 @@
         </div>
         <div class="modal-body">
             <p style="margin-bottom:16px; color:var(--color-text-muted); font-size:13px;">
-                Choose how to generate predictions. The 10% away-win calibration will be applied automatically.
+                Choose how to generate predictions. Current recent form, venue records, and transfer metrics will be factored in automatically.
             </p>
             <div class="form-group">
                 <label>Mode</label>
@@ -231,13 +231,17 @@ function renderTable(data) {
 }
 
 function updateStats(data) {
-    const home = data.filter(p => p.predicted_result === 'HOME').length;
-    const draw = data.filter(p => p.predicted_result === 'DRAW').length;
-    const away = data.filter(p => p.predicted_result === 'AWAY').length;
+    // Expected values (sum of each match's probability), not a count of how
+    // often that outcome is the single most-likely pick — see
+    // supercomputer/static/supercomputer/script.js's updateStats() for why
+    // that distinction matters in a home-dominant league.
+    const home = data.reduce((sum, p) => sum + p.home_win_pct / 100, 0);
+    const draw = data.reduce((sum, p) => sum + p.draw_pct / 100, 0);
+    const away = data.reduce((sum, p) => sum + p.away_win_pct / 100, 0);
     const el = (id) => document.getElementById(id);
-    if (el('statHome')) el('statHome').textContent = home;
-    if (el('statDraw')) el('statDraw').textContent = draw;
-    if (el('statAway')) el('statAway').textContent = away;
+    if (el('statHome')) el('statHome').textContent = Math.round(home);
+    if (el('statDraw')) el('statDraw').textContent = Math.round(draw);
+    if (el('statAway')) el('statAway').textContent = Math.round(away);
 }
 
 async function saveRow(tr, predictionId) {

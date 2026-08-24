@@ -99,13 +99,35 @@
                     <tr>
                         <th>Home</th>
                         <th>Away</th>
+                        <th>Score</th>
+                        <th>Status</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
                     {% for f in fixts %}
-                    <tr>
+                    <tr data-fixture-id="{{ f.id }}">
                         <td>{{ f.home.name }}</td>
                         <td>{{ f.away.name }}</td>
+                        <td>
+                            <input type="number" min="0" class="inline-input score-input" data-side="home"
+                                   value="{{ f.home_goal|default_if_none:'' }}" style="width:48px;">
+                            &ndash;
+                            <input type="number" min="0" class="inline-input score-input" data-side="away"
+                                   value="{{ f.away_goal|default_if_none:'' }}" style="width:48px;">
+                        </td>
+                        <td data-status>
+                            {% if f.is_played %}
+                            <span class="badge badge-success"><i class="fas fa-check"></i> Played</span>
+                            {% else %}
+                            <span class="badge badge-info">Upcoming</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <button class="btn btn-sm btn-primary" onclick="saveFixtureResult(this.closest('tr'))">
+                                Save
+                            </button>
+                        </td>
                     </tr>
                     {% endfor %}
                 </tbody>
@@ -236,6 +258,44 @@ async function handleConfirmImport() {
     } finally {
         btn.disabled = false;
         btn.innerHTML = '<i class="fas fa-check"></i> Confirm Import';
+    }
+}
+
+async function saveFixtureResult(tr) {
+    const fixtureId = tr.dataset.fixtureId;
+    const homeInput = tr.querySelector('.score-input[data-side="home"]');
+    const awayInput = tr.querySelector('.score-input[data-side="away"]');
+
+    const homeVal = homeInput.value.trim();
+    const awayVal = awayInput.value.trim();
+
+    if ((homeVal === '') !== (awayVal === '')) {
+        alert('Enter both scores, or clear both to mark the fixture as not yet played.');
+        return;
+    }
+
+    const payload = homeVal === ''
+        ? { home_goal: null, away_goal: null }
+        : { home_goal: parseInt(homeVal, 10), away_goal: parseInt(awayVal, 10) };
+
+    try {
+        const res = await fetch('/admin/api/fixtures/' + fixtureId + '/result/', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken,
+            },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Save failed'); return; }
+
+        const statusTd = tr.querySelector('[data-status]');
+        statusTd.innerHTML = data.is_played
+            ? '<span class="badge badge-success"><i class="fas fa-check"></i> Played</span>'
+            : '<span class="badge badge-info">Upcoming</span>';
+    } catch (err) {
+        alert('Save failed: ' + err.message);
     }
 }
 

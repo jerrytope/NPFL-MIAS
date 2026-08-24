@@ -11,6 +11,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="{% static 'admin_panel/style.css' %}">
+    <!-- Theme toggle script (early load) -->
+    <script src="{% static 'theme.js' %}"></script>
 </head>
 <body>
     <div class="admin-layout">
@@ -29,6 +31,10 @@
                     <i class="fas fa-chart-line"></i>
                     <span>Predictions</span>
                 </a>
+                <a href="{% url 'admin_panel:prediction_breakdown' %}" class="nav-link {% block nav_prediction_breakdown %}{% endblock %}">
+                    <i class="fas fa-list-check"></i>
+                    <span>Prediction Breakdown</span>
+                </a>
                 <a href="{% url 'admin_panel:fixtures' %}" class="nav-link {% block nav_fixtures %}{% endblock %}">
                     <i class="fas fa-calendar-days"></i>
                     <span>Fixtures</span>
@@ -40,6 +46,10 @@
                 <a href="{% url 'admin_panel:standings' %}" class="nav-link {% block nav_standings %}{% endblock %}">
                     <i class="fas fa-trophy"></i>
                     <span>Standings</span>
+                </a>
+                <a href="{% url 'admin_panel:team_splits' %}" class="nav-link {% block nav_team_splits %}{% endblock %}">
+                    <i class="fas fa-table-list"></i>
+                    <span>Team Splits</span>
                 </a>
                 <div class="nav-divider"></div>
                 <a href="/" class="nav-link" title="Back to public dashboard">
@@ -58,6 +68,8 @@
                     <a href="{% url 'admin_logout' %}" class="btn-logout" title="Logout">
                         <i class="fas fa-right-from-bracket"></i>
                     </a>
+                    <!-- Theme toggle button -->
+                    <button class="theme-toggle-btn" id="themeToggle" title="Switch to dark mode"><i class="fas fa-moon"></i><span class="theme-label">Dark</span></button>
                 </div>
             </header>
 

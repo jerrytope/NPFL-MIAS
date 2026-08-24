@@ -1,6 +1,7 @@
 from django.core.management.base import BaseCommand
 from django.db import transaction
 from dashboard.models import Team, Match
+from dashboard.utils import normalize_season
 import pandas as pd
 
 
@@ -21,16 +22,27 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument('--file', '-f', dest='file', required=False,
-                            default='plans/NPFL ALL-TIME DATABASE.xlsx')
+                            default='plans/all time results 2002-2026.xlsx')
         parser.add_argument('--dry-run', action='store_true', dest='dry_run',
                             help='Run without saving to DB')
         parser.add_argument('--batch-size', dest='batch_size', type=int, default=500,
                             help='Batch size for bulk_create')
+        parser.add_argument('--replace', action='store_true', dest='replace',
+                            help='Delete all existing Match rows before importing (clean cutover to a new source file)')
 
     def handle(self, *args, **options):
         path = options['file']
         dry_run = options['dry_run']
         batch_size = options['batch_size']
+        replace = options['replace']
+
+        if replace and not dry_run:
+            existing_match_count = Match.objects.count()
+            self.stdout.write(self.style.WARNING(
+                f'--replace: deleting {existing_match_count} existing Match rows before import...'
+            ))
+            with transaction.atomic():
+                Match.objects.all().delete()
 
         self.stdout.write(f'Reading Excel: {path}')
         df = pd.read_excel(path, sheet_name=0)
@@ -71,14 +83,18 @@ class Command(BaseCommand):
         matches_to_create = []
         created = 0
         skipped = 0
+        no_score_rows = []
 
         for idx, row in df.iterrows():
-            season = str(row.get('season') or '').strip()
+            season = normalize_season(row.get('season'))
             match_name = str(row.get('match_name') or '').strip()
             home_name = str(row.get('home') or '').strip()
             away_name = str(row.get('away') or '').strip()
             home_goal = to_int(row.get('home_goal'))
             away_goal = to_int(row.get('away_goal'))
+
+            if home_goal is None or away_goal is None:
+                no_score_rows.append(f'{season}: {match_name or f"{home_name} vs {away_name}"}')
 
             home = teams.get(home_name.lower())
             away = teams.get(away_name.lower())
@@ -117,3 +133,11 @@ class Command(BaseCommand):
             created += len(matches_to_create)
 
         self.stdout.write(f'Import finished. Created: {created}, Skipped: {skipped}')
+
+        if no_score_rows:
+            self.stdout.write('')
+            self.stdout.write(self.style.WARNING(
+                f'{len(no_score_rows)} row(s) with no score (imported with null goals, excluded from form/H2H calculations):'
+            ))
+            for line in no_score_rows:
+                self.stdout.write(f'  - {line}')
