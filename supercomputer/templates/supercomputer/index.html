@@ -86,9 +86,25 @@
             <div id="activeFilters" class="active-filters" style="display:none;"></div>
         </section>
 
-        <!-- Progressive reveal status — populated in script.js from predictions_api's
-             max_visible_match_day/total_match_days once results start coming in. -->
+        <!-- Match day lock status — populated in script.js from predictions_api's
+             unlocked_match_days/total_match_days. Explains why the rest of the
+             season isn't shown, so it doesn't read as missing data. -->
         <div id="revealStatus" class="reveal-status" style="display:none;"></div>
+
+        <!-- Tabs Navigation — same markup/classes as the Standings page so the two
+             pages stay visually consistent. Filters above drive BOTH panes. -->
+        <div class="tabs-section">
+            <div class="tabs-header">
+                <button class="tab-btn active" onclick="switchTab('tabPredictions', this)">
+                    <i class="fas fa-percent"></i> Match Predictions
+                </button>
+                <button class="tab-btn" onclick="switchTab('tabScorelines', this)">
+                    <i class="fas fa-futbol"></i> Scoreline Projections
+                </button>
+            </div>
+
+        <!-- Tab 1: Match Predictions (win/draw/loss percentages) -->
+        <div class="tab-pane active" id="tabPredictions">
 
         <!-- Summary Stats Banner — counts each card's actual predicted_result pick
              (not an expected-value sum), so this always matches the badges shown
@@ -98,7 +114,7 @@
                 <div class="stat-icon"><i class="fas fa-gamepad"></i></div>
                 <div class="stat-info">
                     <span class="stat-value" id="statTotal">0</span>
-                    <span class="stat-label">Games Shown</span>
+                    <span class="stat-label" id="statTotalLabel">Season Games</span>
                 </div>
             </div>
             <div class="stat-card stat-home">
@@ -133,15 +149,45 @@
         <!-- Predictions Grid -->
         <main id="predictionsGrid" class="predictions-grid"></main>
 
-        <!-- Pagination -->
-        <nav id="pagination" class="pagination" style="display:none;"></nav>
-
         <!-- Empty State -->
         <div id="emptyState" class="empty-state" style="display:none;">
             <i class="fas fa-robot"></i>
             <h3>No predictions available</h3>
             <p>Run <code>python manage.py generate_predictions</code> to generate predictions.</p>
         </div>
+
+        </div><!-- /#tabPredictions -->
+
+        <!-- Tab 2: Scoreline Projections — exact per-scoreline probabilities.
+             Every number is summed from the same Poisson grid that produces the
+             percentages on Tab 1, so the two tabs can never disagree. -->
+        <div class="tab-pane" id="tabScorelines">
+            <div class="sl-intro">
+                <i class="fas fa-calculator"></i>
+                <span>
+                    Exact scoreline probabilities for every fixture &mdash; not sampled, but
+                    computed directly from each match's expected goals. The most likely single
+                    scoreline is <strong>1&ndash;0 in about 86% of fixtures</strong>, so it's the
+                    spread across the top five, and the goal markets beside them, that tell
+                    the fixtures apart.
+                </span>
+            </div>
+
+            <div id="scorelinesLoading" class="loading-state">
+                <div class="spinner"></div>
+                <p>Computing scorelines...</p>
+            </div>
+
+            <main id="scorelinesGrid" class="scorelines-grid"></main>
+
+            <div id="scorelinesEmpty" class="empty-state" style="display:none;">
+                <i class="fas fa-futbol"></i>
+                <h3>No scoreline projections available</h3>
+                <p>Run <code>python manage.py generate_predictions</code> to compute them.</p>
+            </div>
+        </div><!-- /#tabScorelines -->
+
+        </div><!-- /.tabs-section -->
     </div>
 
     <!-- Super Computer JS -->

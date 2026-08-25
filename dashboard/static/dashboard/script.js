@@ -28,34 +28,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let goalsChartInstance = null;
     let seasonsChartInstance = null;
 
-    // Mapping team names to real logo files in the /logos/ static directory.
-    // Only clubs that have an actual .webp logo file are listed here.
-    // All other clubs fall back to the styled initials badge.
-    const teamLogoMapping = {
-        'abia warriors': 'abia warriors.webp',
-        'rangers international': 'rangers international.webp',
-        'shooting stars': 'shooting stars.webp',
-        'ranchers bees': 'Ranchers Bees.png',
-        'barau': 'barau.webp',
-        'bendel insurance': 'bendel insurance.webp',
-        'doma united': 'doma united.png',
-        'inter lagos': 'inter lagos.png',
-        'kano pillars': 'kano pillars.webp',
-        'katsina united': 'katsina united.webp',
-        'kun khalifat': 'kun khalifat.webp',
-        'kwara united': 'kwara united.webp',
-        'nasarawa united': 'nasarawa united.webp',
-        'niger tornadoes': 'niger tornadoes.webp',
-        'plateau united': 'plateau united.webp',
-        'rivers united': 'rivers united.webp',
-        'shooting stars': 'shooting stars.webp',
-        'sporting lagos': 'sporting lagos.png',
-        'warri wolves': 'warri wolves.webp',
-        'ikorodu city': 'ikorodu city.webp',
-        "enyimba": "enyimba.webp",
-
-
-    };
+    // Crest URLs come from the server (see dashboard/team_logos.py), which
+    // builds them by listing the files actually present in the logos directory.
+    // This replaced a hardcoded name->filename dict here that had drifted from
+    // disk: it named 'doma united.png', 'inter lagos.png' and
+    // 'sporting lagos.png' while the real files are capitalised. Windows
+    // ignores filename case so it looked correct locally, but production runs
+    // on Ubuntu, where those three served 404s and rendered as broken images.
+    // A club with no crest gets null here and falls back to an initials badge.
+    function getTeamLogoUrl(teamName) {
+        if (!teamName) return null;
+        const urls = (typeof teamLogoUrls !== 'undefined') ? teamLogoUrls : {};
+        return urls[teamName.trim().toLowerCase()] || null;
+    }
 
     // Helper to get team initials for placeholder avatar
     function getTeamInitials(teamName) {
@@ -81,12 +66,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Helper to render team avatar (logo or custom initials placeholder)
     function renderTeamAvatar(container, teamName) {
         container.innerHTML = '';
-        const nameLower = teamName.trim().toLowerCase();
+        const logoUrl = getTeamLogoUrl(teamName);
 
-        if (teamLogoMapping[nameLower]) {
+        if (logoUrl) {
             // Real logo file exists
             const img = document.createElement('img');
-            img.src = `${logoBaseUrl}${teamLogoMapping[nameLower]}`;
+            img.src = logoUrl;
             img.alt = `${teamName} Logo`;
             img.className = 'team-logo-img';
             container.appendChild(img);
@@ -102,10 +87,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Build a small logo element for use inside the custom dropdown
     function buildDropdownLogoEl(teamName) {
-        const nameLower = teamName.trim().toLowerCase();
-        if (teamLogoMapping[nameLower]) {
+        const logoUrl = getTeamLogoUrl(teamName);
+        if (logoUrl) {
             const img = document.createElement('img');
-            img.src = `${logoBaseUrl}${teamLogoMapping[nameLower]}`;
+            img.src = logoUrl;
             img.alt = teamName;
             img.className = 'custom-select-option-logo';
             return img;

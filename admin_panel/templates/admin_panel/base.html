@@ -39,6 +39,10 @@
                     <i class="fas fa-calendar-days"></i>
                     <span>Fixtures</span>
                 </a>
+                <a href="{% url 'admin_panel:match_day_access' %}" class="nav-link {% block nav_match_day_access %}{% endblock %}">
+                    <i class="fas fa-lock"></i>
+                    <span>Access Control</span>
+                </a>
                 <a href="{% url 'admin_panel:reports' %}" class="nav-link {% block nav_reports %}{% endblock %}">
                     <i class="fas fa-file-lines"></i>
                     <span>Reports</span>

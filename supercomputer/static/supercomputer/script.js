@@ -3,13 +3,18 @@
    ============================================================ */
 
 const API_BASE = '/supercomputer/api';
-const ITEMS_PER_PAGE = 10;
 
 let allPredictions = [];
 let filteredPredictions = [];
-let currentPage = 1;
 let teams = new Set();
-let maxVisibleMatchDay = 0; // dropdown only offers 1..this — see updateRevealStatus()
+let unlockedMatchDays = [];  // published by the admin — see updateLockStatus()
+let seasonTotals = null;     // season-wide banner figures, independent of locks
+
+// Scoreline Projections tab — lazy-loaded the first time the tab is opened, since
+// its payload carries a full 9x9 grid per fixture and most visits never open it.
+let allScorelines = [];
+let filteredScorelines = [];
+let scorelinesLoaded = false;
 
 // ---------- DOM Elements ----------
 const $ = (sel) => document.querySelector(sel);
@@ -22,6 +27,7 @@ const els = {
     activeFilters: $('#activeFilters'),
     revealStatus: $('#revealStatus'),
     statTotal: $('#statTotal'),
+    statTotalLabel: $('#statTotalLabel'),
     statHomeWins: $('#statHomeWins'),
     statHomeWinsLabel: $('#statHomeWinsLabel'),
     statDraws: $('#statDraws'),
@@ -29,9 +35,11 @@ const els = {
     statAwayWins: $('#statAwayWins'),
     statAwayWinsLabel: $('#statAwayWinsLabel'),
     grid: $('#predictionsGrid'),
-    pagination: $('#pagination'),
     loading: $('#loadingState'),
     empty: $('#emptyState'),
+    scorelinesGrid: $('#scorelinesGrid'),
+    scorelinesLoading: $('#scorelinesLoading'),
+    scorelinesEmpty: $('#scorelinesEmpty'),
 };
 
 // ---------- Initialization ----------
@@ -64,15 +72,22 @@ async function loadPredictions() {
         const data = await res.json();
 
         if (!data.results || data.results.length === 0) {
+            seasonTotals = data.season_totals || null;
+            // Nothing to show for two very different reasons: predictions were
+            // never generated, or they exist but no match day is published yet.
+            // Saying "run generate_predictions" in the second case would send
+            // the admin chasing the wrong problem.
+            const nothingPublished = seasonTotals && seasonTotals.games > 0;
             showLoading(false);
-            showEmpty(true);
+            showEmpty(true, nothingPublished);
             return;
         }
 
         allPredictions = data.results;
         filteredPredictions = allPredictions;
+        seasonTotals = data.season_totals || null;
 
-        updateRevealStatus(data.max_visible_match_day, data.total_match_days);
+        updateLockStatus(data.unlocked_match_days || [], data.total_match_days);
         populateFilterOptions();
         applyFilters();
 
@@ -85,28 +100,31 @@ async function loadPredictions() {
     }
 }
 
-// ---------- Progressive reveal ----------
-// "All Match Days" always shows the full season (matches the Standings
-// page). Only jumping ahead to browse ONE SPECIFIC future match day is
-// gated — you can't select Match Day N in the dropdown until every fixture
-// in Match Day N-1 has a result entered (see supercomputer/views.py::
-// _max_visible_match_day). This just surfaces why some match days aren't
-// selectable yet, so it doesn't look like the dropdown is broken.
-function updateRevealStatus(apiMaxVisibleMatchDay, totalMatchDays) {
-    maxVisibleMatchDay = apiMaxVisibleMatchDay;
+// ---------- Match day locks ----------
+// The admin publishes each match day explicitly from the admin panel's
+// Access Control page. A locked match day is absent from the API entirely —
+// not just from the dropdown — so there is no route to it from this page.
+// This banner explains why the rest of the season isn't here, so it doesn't
+// read as missing data.
+function updateLockStatus(apiUnlockedMatchDays, totalMatchDays) {
+    unlockedMatchDays = apiUnlockedMatchDays;
 
     if (!els.revealStatus) return;
 
-    if (!totalMatchDays || maxVisibleMatchDay >= totalMatchDays) {
+    const shown = unlockedMatchDays.length;
+    if (!totalMatchDays || shown >= totalMatchDays) {
         els.revealStatus.style.display = 'none';
         return;
     }
 
+    const label = shown === 1
+        ? `Match Day ${unlockedMatchDays[0]} is`
+        : `${shown} of ${totalMatchDays} match days are`;
+
     els.revealStatus.innerHTML = `
         <i class="fas fa-lock"></i>
-        Match Days 1&ndash;${maxVisibleMatchDay} of ${totalMatchDays} are individually selectable.
-        Match Day ${maxVisibleMatchDay + 1} unlocks once every Match Day ${maxVisibleMatchDay} result has been entered
-        &mdash; "All Match Days" always shows the full season.
+        ${label} published so far. The remaining match days are released by the
+        NPFL Super Computer team once their predictions are final.
     `;
     els.revealStatus.style.display = 'block';
 }
@@ -121,15 +139,14 @@ function populateFilterOptions() {
 
     const currentMD = els.matchDaySelect.value;
     if (els.matchDaySelect.options.length <= 1) {
-        // Only unlocked match days are selectable — allPredictions holds the
-        // full season (see predictions_api), but jumping ahead to browse a
-        // specific future match day individually stays gated.
-        for (let md = 1; md <= maxVisibleMatchDay; md++) {
+        // Iterate the published list rather than counting 1..N: the admin can
+        // unlock match days in any order, so the unlocked set may have gaps.
+        unlockedMatchDays.forEach(md => {
             const opt = document.createElement('option');
             opt.value = md;
             opt.textContent = `Match Day ${md}`;
             els.matchDaySelect.appendChild(opt);
-        }
+        });
     }
 
     if (els.teamSelect.options.length <= 1) {
@@ -160,11 +177,20 @@ function applyFilters() {
         filteredPredictions = filteredPredictions.filter(p => p.home === team || p.away === team);
     }
 
-    currentPage = 1;
+    // Same match day / team filter drives the Scoreline Projections tab, so
+    // switching tabs never changes which fixtures you're looking at.
+    filteredScorelines = allScorelines;
+    if (matchDay) {
+        filteredScorelines = filteredScorelines.filter(s => s.match_day === parseInt(matchDay));
+    }
+    if (team) {
+        filteredScorelines = filteredScorelines.filter(s => s.home === team || s.away === team);
+    }
+
     updateActiveFilters();
     updateStats();
     renderPredictions();
-    renderPagination();
+    renderScorelines();
 }
 
 function clearFilters() {
@@ -192,11 +218,18 @@ function updateActiveFilters() {
 // ---------- Stats ----------
 // Two different, deliberate methods depending on whether a filter is active:
 //
-// - No filter at all ("All Match Days" / "All Teams"): expected value — sum
-//   of each match's real win/draw/loss probability. This is the SAME method
-//   the Standings page's Tab 1 is built from, so the season-wide numbers
-//   shown here match what's actually driving the predicted table (e.g. a
-//   ~60 total expected away wins across the season, not a raw badge count).
+// - No filter at all ("All Match Days" / "All Teams"): the season_totals block
+//   from the API — expected value, i.e. the sum of each match's real
+//   win/draw/loss probability. This is the SAME method the Standings page's
+//   Tab 1 is built from, so the season-wide numbers shown here match what's
+//   actually driving the predicted table (e.g. ~47 total expected away wins
+//   across the season, not a raw badge count).
+//
+//   It deliberately spans ALL 380 fixtures, including match days the admin
+//   hasn't published yet — it must NOT be recomputed from the cards on screen.
+//   An aggregate over the whole season reveals no individual matchup, so it
+//   leaks nothing, and it's the headline figure the page exists to show. The
+//   locks restrict the cards, not this.
 //
 // - Any filter active (team and/or match day): count each card's actual
 //   predicted_result pick instead, so the banner always matches the visible
@@ -235,18 +268,13 @@ function updateStats() {
                 winCount++;
             }
         });
-    } else {
-        data.forEach(p => {
-            winCount += p.home_win_pct / 100;
-            drawCount += p.draw_pct / 100;
-            lossCount += p.away_win_pct / 100;
-        });
-        winCount = Math.round(winCount);
-        drawCount = Math.round(drawCount);
-        lossCount = Math.round(lossCount);
+    } else if (seasonTotals) {
+        winCount = seasonTotals.home;
+        drawCount = seasonTotals.draw;
+        lossCount = seasonTotals.away;
     }
 
-    animateNumber(els.statTotal, data.length);
+    animateNumber(els.statTotal, filtered ? data.length : (seasonTotals ? seasonTotals.games : data.length));
     animateNumber(els.statHomeWins, winCount);
     animateNumber(els.statDraws, drawCount);
     animateNumber(els.statAwayWins, lossCount);
@@ -254,6 +282,10 @@ function updateStats() {
     els.statHomeWinsLabel.textContent = team ? 'Wins' : 'Home Wins';
     els.statDrawsLabel.textContent = 'Draws';
     els.statAwayWinsLabel.textContent = team ? 'Losses' : 'Away Wins';
+    // Unfiltered, these are whole-season projections, not a count of the cards
+    // below — which are limited to the published match days. Label them so the
+    // two numbers aren't read as contradicting each other.
+    if (els.statTotalLabel) els.statTotalLabel.textContent = filtered ? 'Games Shown' : 'Season Games';
 }
 
 function animateNumber(el, target) {
@@ -273,17 +305,49 @@ function animateNumber(el, target) {
     }, 30);
 }
 
+// ---------- Team crests ----------
+// Logo URLs are resolved server-side (dashboard/team_logos.py) from the actual
+// files on disk, so there is no filename mapping to maintain here. A club with
+// no crest gets a null url and falls back to an initials badge, matching how
+// the public dashboard renders unknown clubs.
+
+function getTeamInitials(teamName) {
+    if (!teamName) return '??';
+    const parts = teamName.trim().split(/\s+/);
+    if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+    return teamName.substring(0, 2).toUpperCase();
+}
+
+function getTeamGradient(teamName) {
+    let hash = 0;
+    for (let i = 0; i < teamName.length; i++) {
+        hash = teamName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h1 = Math.abs(hash % 360);
+    const h2 = (h1 + 40) % 360;
+    return `linear-gradient(135deg, hsl(${h1}, 70%, 45%), hsl(${h2}, 70%, 25%))`;
+}
+
+function initialsBadgeHtml(teamName) {
+    return `<span class="team-initials-badge" style="background:${getTeamGradient(teamName)}">${getTeamInitials(teamName)}</span>`;
+}
+
+// `onerror` swaps in the initials badge so a missing or corrupt file degrades
+// to the placeholder instead of a broken-image icon.
+function teamBadge(teamName, logoUrl) {
+    if (!logoUrl) return initialsBadgeHtml(teamName);
+    const fallback = initialsBadgeHtml(teamName).replace(/"/g, '&quot;');
+    return `<img class="team-logo" src="${logoUrl}" alt="${teamName} crest" loading="lazy"
+                 onerror="this.outerHTML='${fallback}'">`;
+}
+
 // ---------- Rendering ----------
 function renderPredictions() {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    const end = start + ITEMS_PER_PAGE;
-    const pageData = filteredPredictions.slice(start, end);
-
     els.grid.innerHTML = '';
 
     let lastMD = null;
 
-    pageData.forEach((p, i) => {
+    filteredPredictions.forEach((p, i) => {
         if (p.match_day !== lastMD) {
             lastMD = p.match_day;
             const header = document.createElement('div');
@@ -322,12 +386,14 @@ function createPredictionCard(p) {
     card.innerHTML = `
         <div class="card-match-day">Match Day ${p.match_day}</div>
         <div class="card-teams">
-            <div>
+            <div class="card-team-side home">
+                ${teamBadge(p.home, p.home_logo)}
                 <div class="team-name home">${p.home}</div>
                 <div class="venue-tag">Home</div>
             </div>
             <div class="vs-badge">VS</div>
-            <div>
+            <div class="card-team-side away">
+                ${teamBadge(p.away, p.away_logo)}
                 <div class="team-name away">${p.away}</div>
                 <div class="venue-tag">Away</div>
             </div>
@@ -397,6 +463,207 @@ function createPredictionCard(p) {
     return card;
 }
 
+// ---------- Scoreline Projections tab ----------
+function switchTab(tabId, btn) {
+    $$('.tab-pane').forEach(p => p.classList.remove('active'));
+    $$('.tab-btn').forEach(b => b.classList.remove('active'));
+
+    const targetPane = document.getElementById(tabId);
+    if (targetPane) targetPane.classList.add('active');
+    if (btn) btn.classList.add('active');
+
+    if (tabId === 'tabScorelines' && !scorelinesLoaded) loadScorelines();
+}
+
+async function loadScorelines() {
+    scorelinesLoaded = true; // set up front so a fast double-click can't fire two fetches
+    showScorelinesLoading(true);
+
+    try {
+        const res = await fetch(`${API_BASE}/scorelines/`);
+        const data = await res.json();
+
+        allScorelines = data.results || [];
+        showScorelinesLoading(false);
+
+        if (allScorelines.length === 0) {
+            showScorelinesEmpty(true);
+            return;
+        }
+
+        showScorelinesEmpty(false);
+        applyFilters(); // re-applies the current match day / team filter to the new data
+    } catch (err) {
+        console.error('Failed to load scorelines:', err);
+        scorelinesLoaded = false; // let the user retry by switching tabs again
+        showScorelinesLoading(false);
+        showScorelinesEmpty(true);
+    }
+}
+
+// Renders every filtered fixture in one list. Pagination is deliberately
+// absent from both tabs: paging forward through the unfiltered list used to
+// walk straight into match days the admin hadn't published, which is exactly
+// what the locks exist to prevent. Do not reintroduce it.
+function renderScorelines() {
+    if (!els.scorelinesGrid) return;
+
+    els.scorelinesGrid.innerHTML = '';
+
+    let lastMD = null;
+    filteredScorelines.forEach(s => {
+        if (s.match_day !== lastMD) {
+            lastMD = s.match_day;
+            const header = document.createElement('div');
+            header.className = 'match-day-header';
+            header.textContent = `Match Day ${s.match_day}`;
+            els.scorelinesGrid.appendChild(header);
+        }
+        els.scorelinesGrid.appendChild(createScorelineCard(s));
+    });
+}
+
+function createScorelineCard(s) {
+    const card = document.createElement('div');
+    card.className = 'scoreline-card';
+
+    const top = s.top_scorelines || [];
+    const peak = top[0];
+    // Bars are scaled against the top scoreline, not against 100% — absolute
+    // probabilities here are all small (~20% at best), so scaling to 100 would
+    // render every bar as a barely-visible sliver.
+    const peakProb = peak ? peak.prob : 1;
+
+    const rows = top.map((sc, i) => {
+        const pct = sc.prob * 100;
+        const width = peakProb > 0 ? (sc.prob / peakProb) * 100 : 0;
+        return `
+            <div class="sl-row${i === 0 ? ' top' : ''}">
+                <span class="sl-score">${sc.home}&ndash;${sc.away}</span>
+                <div class="sl-bar-track">
+                    <div class="sl-bar-fill" style="width:0%" data-width="${width.toFixed(1)}"></div>
+                </div>
+                <span class="sl-pct">${pct.toFixed(1)}%</span>
+            </div>
+        `;
+    }).join('');
+
+    const m = s.markets || {};
+    const market = (label, value, strong) => `
+        <div class="market-item${strong ? ' strong' : ''}">
+            <span class="market-label">${label}</span>
+            <span class="market-value">${(value * 100).toFixed(0)}%</span>
+        </div>
+    `;
+
+    card.innerHTML = `
+        <div class="sl-header">
+            <div class="sl-teams">
+                ${teamBadge(s.home, s.home_logo)}
+                <span class="sl-team home">${s.home}</span>
+                <span class="sl-vs">vs</span>
+                ${teamBadge(s.away, s.away_logo)}
+                <span class="sl-team away">${s.away}</span>
+            </div>
+            <div class="sl-xg">
+                <i class="fas fa-bullseye"></i>
+                Expected Goals <strong>${s.home_lambda.toFixed(2)}</strong> &ndash; <strong>${s.away_lambda.toFixed(2)}</strong>
+            </div>
+        </div>
+
+        <div class="sl-section-label">Most Likely Scorelines</div>
+        <div class="sl-rows">${rows}</div>
+
+        <div class="sl-section-label">Goal Markets</div>
+        <div class="markets-row">
+            ${market('Over 2.5', m.over_2_5 || 0, (m.over_2_5 || 0) >= 0.5)}
+            ${market('Under 2.5', m.under_2_5 || 0, (m.under_2_5 || 0) >= 0.5)}
+            ${market('BTTS Yes', m.btts_yes || 0, (m.btts_yes || 0) >= 0.5)}
+            ${market('BTTS No', m.btts_no || 0, (m.btts_no || 0) >= 0.5)}
+            ${market('Home Clean Sheet', m.home_clean_sheet || 0, false)}
+            ${market('Away Clean Sheet', m.away_clean_sheet || 0, false)}
+        </div>
+
+        <details class="sl-heatmap-wrap">
+            <summary><i class="fas fa-th"></i> Full scoreline probability grid</summary>
+            <div class="sl-heatmap-slot"></div>
+        </details>
+    `;
+
+    // The grid is built on first expand, not up front: with no pagination the
+    // tab renders all 380 fixtures at once, and eagerly building every 9x9
+    // table would put ~31,000 extra cells in the DOM that almost nobody opens.
+    const details = card.querySelector('details');
+    details.addEventListener('toggle', () => {
+        const slot = details.querySelector('.sl-heatmap-slot');
+        if (details.open && slot && !slot.innerHTML) slot.innerHTML = buildHeatmap(s);
+    });
+
+    // Animate the bars in, matching how the prediction cards' probability bars behave.
+    requestAnimationFrame(() => {
+        setTimeout(() => {
+            card.querySelectorAll('.sl-bar-fill').forEach(bar => {
+                bar.style.width = `${bar.dataset.width}%`;
+            });
+        }, 50);
+    });
+
+    return card;
+}
+
+// 9x9 grid of every scoreline 0-0 .. 8-8. Cell shading is scaled to the grid's
+// own peak so the structure stays visible — absolute probabilities are tiny once
+// you leave the top-left corner.
+function buildHeatmap(s) {
+    const grid = s.grid || [];
+    if (!grid.length) return '';
+
+    const peak = Math.max(...grid.flat());
+    const peakCell = s.top_scorelines && s.top_scorelines[0];
+
+    let head = '<tr><th class="corner"><span>H</span>&nbsp;\\&nbsp;<span>A</span></th>';
+    for (let a = 0; a < grid[0].length; a++) head += `<th>${a}</th>`;
+    head += '</tr>';
+
+    let body = '';
+    grid.forEach((row, h) => {
+        body += `<tr><th>${h}</th>`;
+        row.forEach((p, a) => {
+            const intensity = peak > 0 ? p / peak : 0;
+            const isPeak = peakCell && peakCell.home === h && peakCell.away === a;
+            const pct = p * 100;
+            // Below 0.05% renders as "·" — printing 0.0% in 50-odd cells is noise.
+            const label = pct >= 0.05 ? pct.toFixed(1) : '·';
+            body += `<td class="${isPeak ? 'peak' : ''}" style="--cell:${intensity.toFixed(3)}"
+                         title="${h}–${a}: ${pct.toFixed(2)}%">${label}</td>`;
+        });
+        body += '</tr>';
+    });
+
+    return `
+        <div class="sl-heatmap-scroll">
+            <table class="sl-heatmap">
+                <thead>${head}</thead>
+                <tbody>${body}</tbody>
+            </table>
+            <p class="sl-heatmap-note">
+                Home goals down the side, away goals across the top. Values are the exact
+                probability of that scoreline, in percent.
+            </p>
+        </div>
+    `;
+}
+
+function showScorelinesLoading(show) {
+    if (els.scorelinesLoading) els.scorelinesLoading.style.display = show ? 'flex' : 'none';
+    if (els.scorelinesGrid) els.scorelinesGrid.style.display = show ? 'none' : 'grid';
+}
+
+function showScorelinesEmpty(show) {
+    if (els.scorelinesEmpty) els.scorelinesEmpty.style.display = show ? 'block' : 'none';
+    if (els.scorelinesGrid) els.scorelinesGrid.style.display = show ? 'none' : 'grid';
+}
+
 function getResultIcon(result) {
     switch (result) {
         case 'HOME': return '<i class="fas fa-home"></i>';
@@ -406,94 +673,24 @@ function getResultIcon(result) {
     }
 }
 
-// ---------- Pagination ----------
-function renderPagination() {
-    const totalPages = Math.ceil(filteredPredictions.length / ITEMS_PER_PAGE);
-
-    if (totalPages <= 1) {
-        els.pagination.style.display = 'none';
-        return;
-    }
-
-    els.pagination.style.display = 'flex';
-    els.pagination.innerHTML = '';
-
-    const prevBtn = createPageBtn('<i class="fas fa-chevron-left"></i>', currentPage > 1, () => {
-        currentPage--;
-        renderPredictions();
-        renderPagination();
-        scrollToTop();
-    });
-    els.pagination.appendChild(prevBtn);
-
-    const range = getPageRange(currentPage, totalPages);
-    range.forEach(page => {
-        if (page === '...') {
-            const ellipsis = document.createElement('span');
-            ellipsis.className = 'page-btn disabled';
-            ellipsis.textContent = '...';
-            els.pagination.appendChild(ellipsis);
-        } else {
-            const btn = createPageBtn(page, true, () => {
-                currentPage = page;
-                renderPredictions();
-                renderPagination();
-                scrollToTop();
-            });
-            if (page === currentPage) btn.classList.add('active');
-            els.pagination.appendChild(btn);
-        }
-    });
-
-    const nextBtn = createPageBtn('<i class="fas fa-chevron-right"></i>', currentPage < totalPages, () => {
-        currentPage++;
-        renderPredictions();
-        renderPagination();
-        scrollToTop();
-    });
-    els.pagination.appendChild(nextBtn);
-}
-
-function createPageBtn(label, enabled, onClick) {
-    const btn = document.createElement('button');
-    btn.className = `page-btn${enabled ? '' : ' disabled'}`;
-    btn.innerHTML = label;
-    if (enabled) btn.addEventListener('click', onClick);
-    return btn;
-}
-
-function getPageRange(current, total) {
-    if (total <= 7) return Array.from({length: total}, (_, i) => i + 1);
-
-    const range = [];
-    range.push(1);
-
-    if (current > 3) range.push('...');
-
-    const start = Math.max(2, current - 1);
-    const end = Math.min(total - 1, current + 1);
-
-    for (let i = start; i <= end; i++) range.push(i);
-
-    if (current < total - 2) range.push('...');
-
-    range.push(total);
-    return range;
-}
-
-function scrollToTop() {
-    window.scrollTo({ top: els.grid.offsetTop - 20, behavior: 'smooth' });
-}
-
 // ---------- Helpers ----------
 function showLoading(show) {
     els.loading.style.display = show ? 'flex' : 'none';
     els.grid.style.display = show ? 'none' : 'grid';
 }
 
-function showEmpty(show) {
+function showEmpty(show, nothingPublished) {
     els.empty.style.display = show ? 'block' : 'none';
     els.grid.style.display = show ? 'none' : 'grid';
+
+    if (show && nothingPublished) {
+        els.empty.innerHTML = `
+            <i class="fas fa-lock"></i>
+            <h3>No match days published yet</h3>
+            <p>Predictions are ready but none have been released. An admin can publish them
+               from the Access Control page in the admin panel.</p>
+        `;
+    }
 }
 
 function getCookie(name) {

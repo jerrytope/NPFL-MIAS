@@ -13,7 +13,9 @@ from django.views.decorators.http import require_POST, require_http_methods
 from dashboard.models import Team, TeamComparisonReport, Match
 from dashboard.utils import get_npfl_data, perform_comparison, generate_expert_report, get_team_home_away_splits, get_all_seasons
 from dashboard.views import NPFL_CLUBS_2026_2027, canonical_team_pair
-from supercomputer.models import SeasonFixture, Prediction, MatchAnalysisReport
+from supercomputer.models import (
+    SeasonFixture, Prediction, MatchAnalysisReport, MatchDayVisibility,
+)
 from supercomputer.predictor import predict_all_fixtures
 from supercomputer.standings import calculate_standings, get_prediction_breakdown
 
@@ -259,6 +261,7 @@ def generate_predictions(request):
                     'away_defense': r['away_defense'],
                     'home_transfer_score': r.get('home_transfer_score', 0),
                     'away_transfer_score': r.get('away_transfer_score', 0),
+                    'scoreline_grid': r.get('scoreline_grid'),
                 },
             )
             if was_created:
@@ -310,6 +313,122 @@ def fixtures(request):
         'season': SEASON,
     }
     return render(request, 'admin_panel/fixtures.html', context)
+
+
+# ---------------------------------------------------------------------------
+# Access Control — which match days are public
+# ---------------------------------------------------------------------------
+
+@login_required
+def match_day_access(request):
+    """
+    Publish/unpublish each match day's predictions and scorelines.
+
+    A locked match day is absent from the public API entirely, so it can't be
+    reached from /supercomputer/ by any filter. This replaced an automatic
+    rule that unlocked a match day once the previous one's results had been
+    entered — publishing is an editorial decision, not a side effect of
+    bookkeeping.
+    """
+    match_days = sorted(
+        SeasonFixture.objects.filter(season=SEASON)
+        .values_list('match_day', flat=True).distinct()
+    )
+
+    # Any match day without a row yet (e.g. freshly imported fixtures) is
+    # created locked, so a new import is never public by accident.
+    existing = {
+        v.match_day: v
+        for v in MatchDayVisibility.objects.filter(season=SEASON)
+    }
+    for md in match_days:
+        if md not in existing:
+            existing[md] = MatchDayVisibility.objects.create(
+                season=SEASON, match_day=md, is_unlocked=False,
+            )
+
+    fixtures = SeasonFixture.objects.filter(season=SEASON)
+    rows = []
+    for md in match_days:
+        md_fixtures = [f for f in fixtures if f.match_day == md]
+        rows.append({
+            'match_day': md,
+            'fixture_count': len(md_fixtures),
+            'played_count': sum(1 for f in md_fixtures if f.is_played),
+            'is_unlocked': existing[md].is_unlocked,
+        })
+
+    unlocked_count = sum(1 for r in rows if r['is_unlocked'])
+
+    return render(request, 'admin_panel/match_day_access.html', {
+        'rows': rows,
+        'season': SEASON,
+        'unlocked_count': unlocked_count,
+        'locked_count': len(rows) - unlocked_count,
+        'total_count': len(rows),
+    })
+
+
+@require_POST
+@login_required
+def match_day_visibility_update(request, match_day):
+    """API: lock or unlock one match day."""
+    try:
+        body = json.loads(request.body) if request.body else request.POST
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    is_unlocked = body.get('is_unlocked')
+    if isinstance(is_unlocked, str):
+        is_unlocked = is_unlocked.lower() in ('true', '1', 'yes')
+    if is_unlocked is None:
+        return JsonResponse({'error': 'is_unlocked is required'}, status=400)
+
+    if not SeasonFixture.objects.filter(season=SEASON, match_day=match_day).exists():
+        return JsonResponse({'error': f'No fixtures for match day {match_day}'}, status=404)
+
+    visibility, _ = MatchDayVisibility.objects.update_or_create(
+        season=SEASON, match_day=match_day,
+        defaults={'is_unlocked': bool(is_unlocked)},
+    )
+
+    return JsonResponse({
+        'match_day': visibility.match_day,
+        'is_unlocked': visibility.is_unlocked,
+        'unlocked_count': MatchDayVisibility.objects.filter(season=SEASON, is_unlocked=True).count(),
+    })
+
+
+@require_POST
+@login_required
+def match_day_visibility_bulk(request):
+    """API: lock or unlock every match day at once."""
+    try:
+        body = json.loads(request.body) if request.body else request.POST
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    action = str(body.get('action', '')).lower()
+    if action not in ('lock_all', 'unlock_all'):
+        return JsonResponse({'error': "action must be 'lock_all' or 'unlock_all'"}, status=400)
+
+    unlock = action == 'unlock_all'
+    match_days = sorted(
+        SeasonFixture.objects.filter(season=SEASON)
+        .values_list('match_day', flat=True).distinct()
+    )
+
+    with transaction.atomic():
+        for md in match_days:
+            MatchDayVisibility.objects.update_or_create(
+                season=SEASON, match_day=md, defaults={'is_unlocked': unlock},
+            )
+
+    return JsonResponse({
+        'action': action,
+        'affected': len(match_days),
+        'unlocked_count': len(match_days) if unlock else 0,
+    })
 
 
 @require_http_methods(["PUT", "POST"])

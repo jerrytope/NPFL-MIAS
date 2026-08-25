@@ -87,7 +87,45 @@ def score_probabilities(lambda_home, lambda_away, max_goals=MAX_GOALS):
     return grid, p_home, p_draw, p_away
 
 
+def top_scorelines(grid, n=5):
+    """
+    The n most likely exact scorelines, highest probability first.
+
+    Returns a list of {'home': int, 'away': int, 'prob': float}. Note that in a
+    low-scoring, home-dominant league the single top scoreline carries very
+    little information — 1-0 is the peak for ~86% of NPFL fixtures at only ~20%
+    probability. It's the shape of the top few, and the goal markets derived
+    from the same grid, that actually distinguish one fixture from another.
+    """
+    flat_order = np.argsort(grid, axis=None)[::-1][:n]
+    return [
+        {'home': int(h), 'away': int(a), 'prob': float(grid[h, a])}
+        for h, a in zip(*np.unravel_index(flat_order, grid.shape))
+    ]
+
+
 def most_likely_scoreline(grid):
     """(home_goals, away_goals, probability) of the single most likely exact scoreline."""
-    h, a = np.unravel_index(np.argmax(grid), grid.shape)
-    return int(h), int(a), float(grid[h, a])
+    top = top_scorelines(grid, 1)[0]
+    return top['home'], top['away'], top['prob']
+
+
+def goal_markets(grid):
+    """
+    Goal-based market probabilities summed from the same scoreline grid, so they
+    can never disagree with the scorelines shown alongside them.
+
+    Returns floats in [0, 1] for over/under 2.5 goals, both-teams-to-score, and
+    each side keeping a clean sheet.
+    """
+    rows, cols = np.indices(grid.shape)
+    totals = rows + cols
+
+    return {
+        'over_2_5': float(grid[totals > 2].sum()),
+        'under_2_5': float(grid[totals <= 2].sum()),
+        'btts_yes': float(grid[(rows > 0) & (cols > 0)].sum()),
+        'btts_no': float(grid[(rows == 0) | (cols == 0)].sum()),
+        'home_clean_sheet': float(grid[cols == 0].sum()),
+        'away_clean_sheet': float(grid[rows == 0].sum()),
+    }

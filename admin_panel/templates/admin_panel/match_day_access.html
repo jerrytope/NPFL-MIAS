@@ -1,0 +1,186 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block nav_match_day_access %}active{% endblock %}
+{% block page_title %}Access Control{% endblock %}
+
+{% block content %}
+<!-- Summary -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon green"><i class="fas fa-lock-open"></i></div>
+        <div>
+            <div class="stat-value" id="statUnlocked">{{ unlocked_count }}</div>
+            <div class="stat-label">Published</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon amber"><i class="fas fa-lock"></i></div>
+        <div>
+            <div class="stat-value" id="statLocked">{{ locked_count }}</div>
+            <div class="stat-label">Locked</div>
+        </div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-calendar-check"></i></div>
+        <div>
+            <div class="stat-value">{{ total_count }}</div>
+            <div class="stat-label">Match Days</div>
+        </div>
+    </div>
+</div>
+
+<div class="data-table-wrapper" style="margin-top:24px; padding:20px;">
+    <p style="font-size:13px; line-height:1.6; margin:0;">
+        <i class="fas fa-circle-info" style="margin-right:6px;"></i>
+        A <strong>published</strong> match day is visible to the public on the Super Computer
+        page &mdash; both its match predictions and its scoreline projections. A
+        <strong>locked</strong> match day is hidden completely: it cannot be reached by any
+        filter, by browsing "All Match Days", or by requesting it directly. Season-wide
+        totals in the stats banner still cover all {{ total_count }} match days, since they
+        reveal no individual fixture.
+    </p>
+</div>
+
+<!-- Bulk actions -->
+<div class="section-header" style="margin-top:32px;">
+    <h3>Match Day Visibility ({{ season }})</h3>
+    <div style="display:flex; gap:8px;">
+        <button class="btn btn-sm btn-outline" onclick="bulkVisibility('lock_all')">
+            <i class="fas fa-lock"></i> Lock All
+        </button>
+        <button class="btn btn-sm btn-primary" onclick="bulkVisibility('unlock_all')">
+            <i class="fas fa-lock-open"></i> Publish All
+        </button>
+    </div>
+</div>
+
+<div class="data-table-wrapper">
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Match Day</th>
+                <th>Fixtures</th>
+                <th>Results In</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in rows %}
+            <tr data-match-day="{{ row.match_day }}" data-unlocked="{{ row.is_unlocked|yesno:'1,0' }}">
+                <td><strong>Match Day {{ row.match_day }}</strong></td>
+                <td>{{ row.fixture_count }}</td>
+                <td>{{ row.played_count }} / {{ row.fixture_count }}</td>
+                <td data-status>
+                    {% if row.is_unlocked %}
+                    <span class="badge badge-success"><i class="fas fa-lock-open"></i> Published</span>
+                    {% else %}
+                    <span class="badge badge-warning"><i class="fas fa-lock"></i> Locked</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <button class="btn btn-sm {% if row.is_unlocked %}btn-outline{% else %}btn-primary{% endif %}"
+                            data-toggle
+                            onclick="toggleMatchDay(this.closest('tr'))">
+                        {% if row.is_unlocked %}Lock{% else %}Publish{% endif %}
+                    </button>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5">No fixtures found for {{ season }}. Import fixtures first.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Save Toast -->
+<div id="saveToast" style="display:none; position:fixed; bottom:24px; right:24px; background:#10b981; color:#fff; padding:12px 20px; border-radius:8px; font-weight:600; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:9999;">
+    <i class="fas fa-check"></i> <span id="toastMsg">Saved</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function getCookie(name) {
+    const value = '; ' + document.cookie;
+    const parts = value.split('; ' + name + '=');
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+}
+
+const csrfToken = getCookie('csrftoken');
+
+function showToast(msg) {
+    const toast = document.getElementById('saveToast');
+    document.getElementById('toastMsg').textContent = msg || 'Saved';
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3000);
+}
+
+function paintRow(row, isUnlocked) {
+    row.dataset.unlocked = isUnlocked ? '1' : '0';
+
+    row.querySelector('[data-status]').innerHTML = isUnlocked
+        ? '<span class="badge badge-success"><i class="fas fa-lock-open"></i> Published</span>'
+        : '<span class="badge badge-warning"><i class="fas fa-lock"></i> Locked</span>';
+
+    const btn = row.querySelector('[data-toggle]');
+    btn.textContent = isUnlocked ? 'Lock' : 'Publish';
+    btn.className = 'btn btn-sm ' + (isUnlocked ? 'btn-outline' : 'btn-primary');
+}
+
+function refreshCounts() {
+    const rows = document.querySelectorAll('tr[data-match-day]');
+    let unlocked = 0;
+    rows.forEach(r => { if (r.dataset.unlocked === '1') unlocked++; });
+    document.getElementById('statUnlocked').textContent = unlocked;
+    document.getElementById('statLocked').textContent = rows.length - unlocked;
+}
+
+async function toggleMatchDay(row) {
+    const matchDay = row.dataset.matchDay;
+    const target = row.dataset.unlocked !== '1';   // flip current state
+    const btn = row.querySelector('[data-toggle]');
+    btn.disabled = true;
+
+    try {
+        const res = await fetch(`/admin/api/match-day/${matchDay}/visibility/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ is_unlocked: target }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Request failed');
+
+        paintRow(row, data.is_unlocked);
+        refreshCounts();
+        showToast(`Match Day ${matchDay} ${data.is_unlocked ? 'published' : 'locked'}`);
+    } catch (err) {
+        console.error(err);
+        showToast('Could not update: ' + err.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+async function bulkVisibility(action) {
+    try {
+        const res = await fetch('/admin/api/match-day/visibility/bulk/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify({ action }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Request failed');
+
+        const unlocked = action === 'unlock_all';
+        document.querySelectorAll('tr[data-match-day]').forEach(r => paintRow(r, unlocked));
+        refreshCounts();
+        showToast(`${data.affected} match days ${unlocked ? 'published' : 'locked'}`);
+    } catch (err) {
+        console.error(err);
+        showToast('Could not update: ' + err.message);
+    }
+}
+</script>
+{% endblock %}

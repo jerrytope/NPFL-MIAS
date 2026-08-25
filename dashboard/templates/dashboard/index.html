@@ -386,9 +386,16 @@
 {% endblock %}
 
 {% block scripts %}
+{{ team_logos|json_script:"team-logos-data" }}
 <script>
-    // Global path mapping for logos directory
-    const logoBaseUrl = "{% static '' %}";
+    // {lowercased club name: crest url or null}, resolved server-side from the
+    // files actually present in the logos directory — see dashboard/team_logos.py.
+    let teamLogoUrls = {};
+    try {
+        teamLogoUrls = JSON.parse(document.getElementById('team-logos-data').textContent);
+    } catch (e) {
+        console.error('Could not read team logo data:', e);
+    }
 </script>
 <script src="{% static 'dashboard/script.js' %}"></script>
 {% endblock %}

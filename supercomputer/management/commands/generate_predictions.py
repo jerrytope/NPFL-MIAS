@@ -67,6 +67,7 @@ class Command(BaseCommand):
                         'away_defense': r['away_defense'],
                         'home_transfer_score': r.get('home_transfer_score', 0),
                         'away_transfer_score': r.get('away_transfer_score', 0),
+                        'scoreline_grid': r.get('scoreline_grid'),
                     },
                 )
                 if was_created:

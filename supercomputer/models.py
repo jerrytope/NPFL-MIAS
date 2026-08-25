@@ -45,10 +45,46 @@ class Prediction(models.Model):
     away_defense = models.FloatField(default=1)
     home_transfer_score = models.FloatField(default=0)
     away_transfer_score = models.FloatField(default=0)
+    # Exact P(home_goals=h, away_goals=a) for h, a in 0..8, straight from
+    # poisson_model.score_probabilities(). Single source for the Scoreline
+    # Projections tab — the top-5 list, the goal markets and the 9x9 heatmap are
+    # all derived from this one field, so they can't drift apart. Null on rows
+    # predicted before this field existed; regenerate to backfill.
+    scoreline_grid = models.JSONField(null=True, blank=True)
     manually_edited = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.fixture} -> {self.predicted_result} ({self.confidence:.1f}%)"
+
+
+class MatchDayVisibility(models.Model):
+    """
+    Admin-controlled public visibility for one match day.
+
+    Replaces the old automatic rule (unlock Match Day N once every Match Day
+    N-1 result was entered), which tied publishing to bookkeeping and, worse,
+    only ever hid the match day *dropdown* — the full season stayed readable
+    via "All Match Days". Now the admin publishes each match day explicitly
+    from the Access Control page, and a locked match day is absent from every
+    public route.
+
+    One row covers BOTH the predictions and scorelines tabs: they are two
+    views of the same fixture and must never disagree about what is public.
+    An absent row means locked.
+    """
+    season = models.CharField(max_length=32, default='26/27')
+    match_day = models.IntegerField()
+    is_unlocked = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['match_day']
+        unique_together = ['season', 'match_day']
+        verbose_name_plural = 'Match day visibility'
+
+    def __str__(self):
+        state = 'unlocked' if self.is_unlocked else 'locked'
+        return f"MD{self.match_day} ({self.season}) — {state}"
 
 
 class MatchAnalysisReport(models.Model):

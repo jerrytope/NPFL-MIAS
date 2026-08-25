@@ -127,7 +127,8 @@ def predict_match(home_team, away_team, ratings, league_avg_home_goals, league_a
             predicted_result, confidence,
             home_lambda, away_lambda,
             home_attack, home_defense, away_attack, away_defense,
-            home_transfer_score, away_transfer_score
+            home_transfer_score, away_transfer_score,
+            scoreline_grid
     """
     home_transfer_raw = get_team_transfer_rating(home_team)
     away_transfer_raw = get_team_transfer_rating(away_team)
@@ -137,7 +138,7 @@ def predict_match(home_team, away_team, ratings, league_avg_home_goals, league_a
         home_transfer_raw, away_transfer_raw,
     )
 
-    _, p_home, p_draw, p_away = score_probabilities(lambda_home, lambda_away)
+    grid, p_home, p_draw, p_away = score_probabilities(lambda_home, lambda_away)
 
     total = p_home + p_draw + p_away
     home_pct = round((p_home / total) * 100, 1)
@@ -176,6 +177,7 @@ def predict_match(home_team, away_team, ratings, league_avg_home_goals, league_a
         'away_defense': round(away_rating.away_defense, 3),
         'home_transfer_score': round(home_transfer_raw, 1),
         'away_transfer_score': round(away_transfer_raw, 1),
+        'scoreline_grid': [[round(float(p), 6) for p in row] for row in grid],
     }
 
 

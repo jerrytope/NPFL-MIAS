@@ -427,10 +427,55 @@ body {
     margin-bottom: 16px;
 }
 
+/* Each side of a fixture stacks: crest, name, venue tag. */
+.card-team-side {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;   /* lets long club names ellipsize instead of forcing overflow */
+    gap: 6px;
+}
+
+.card-team-side.home {
+    align-items: flex-start;
+}
+
+.card-team-side.away {
+    align-items: flex-end;
+}
+
+/* ---------- Team crests ---------- */
+/* Fixed box + contain: the crest files vary wildly in aspect ratio, so without
+   this the cards jump around depending on which clubs are playing. */
+.team-logo {
+    width: 44px;
+    height: 44px;
+    object-fit: contain;
+    flex-shrink: 0;
+}
+
+/* Fallback for a club with no crest file, or one that fails to load. */
+.team-initials-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    flex-shrink: 0;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+}
+
 .team-name {
     font-weight: 600;
     font-size: 1rem;
-    flex: 1;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .team-name.home {
@@ -661,45 +706,6 @@ body {
     color: var(--accent-blue);
 }
 
-/* ---------- Pagination ---------- */
-.pagination {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    margin-top: 24px;
-    padding: 16px 0;
-}
-
-.page-btn {
-    padding: 8px 14px;
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-sm);
-    background: var(--glass-bg);
-    color: var(--text-secondary);
-    font-family: var(--font-body);
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: var(--transition);
-}
-
-.page-btn:hover:not(.disabled):not(.active) {
-    border-color: var(--accent-blue);
-    color: var(--accent-blue);
-}
-
-.page-btn.active {
-    background: rgba(56, 189, 248, 0.2);
-    border-color: var(--accent-blue);
-    color: var(--accent-blue);
-    font-weight: 600;
-}
-
-.page-btn.disabled {
-    opacity: 0.3;
-    pointer-events: none;
-}
-
 /* ---------- Modal ---------- */
 .modal {
     position: fixed;
@@ -804,9 +810,336 @@ body {
     border-color: var(--text-secondary);
 }
 
+/* ---------- Tabs (mirrors the Standings page) ---------- */
+.tabs-header {
+    display: flex;
+    gap: 4px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.tab-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 20px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    font-family: var(--font-body);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.tab-btn:hover {
+    color: var(--text-primary);
+    background: rgba(14, 165, 233, 0.05);
+}
+
+.tab-btn.active {
+    color: var(--accent-blue);
+}
+
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 2px;
+    background: var(--accent-blue);
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+/* ---------- Scoreline Projections ---------- */
+.sl-intro {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 12px 16px;
+    margin-bottom: 18px;
+    border-radius: var(--radius-sm);
+    background: rgba(124, 58, 237, 0.06);
+    border: 1px solid rgba(124, 58, 237, 0.18);
+    color: var(--text-secondary);
+    font-size: 0.82rem;
+    line-height: 1.5;
+}
+
+.sl-intro i {
+    color: var(--accent-purple);
+    margin-top: 3px;
+}
+
+.scorelines-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 16px;
+}
+
+.scoreline-card {
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+    transition: var(--transition);
+}
+
+.scoreline-card:hover {
+    border-color: var(--border-glow);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+}
+
+.sl-header {
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+    border-bottom: 1px solid var(--glass-border);
+}
+
+.sl-teams {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* Inline crests here sit next to the names rather than above them, so they run
+   smaller than the prediction cards' stacked layout. */
+.sl-teams .team-logo,
+.sl-teams .team-initials-badge {
+    width: 26px;
+    height: 26px;
+}
+
+.sl-teams .team-initials-badge {
+    font-size: 0.62rem;
+}
+
+.sl-vs {
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.sl-xg {
+    margin-top: 6px;
+    font-size: 0.76rem;
+    color: var(--text-secondary);
+}
+
+.sl-xg i {
+    color: var(--accent-blue);
+    margin-right: 4px;
+}
+
+.sl-xg strong {
+    font-family: var(--font-display);
+    color: var(--text-primary);
+}
+
+.sl-section-label {
+    margin-bottom: 8px;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+}
+
+.sl-rows {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    margin-bottom: 18px;
+}
+
+.sl-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.sl-score {
+    width: 42px;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+}
+
+.sl-row.top .sl-score {
+    color: var(--accent-blue);
+}
+
+.sl-bar-track {
+    flex: 1;
+    height: 8px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.sl-bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    background: linear-gradient(90deg, var(--accent-blue), #7dd3fc);
+    transition: width 0.8s ease;
+}
+
+.sl-row.top .sl-bar-fill {
+    background: linear-gradient(90deg, var(--accent-purple), var(--accent-blue));
+}
+
+.sl-pct {
+    width: 52px;
+    text-align: right;
+    font-family: var(--font-display);
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.markets-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.market-item {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+    background: rgba(0, 0, 0, 0.03);
+    border: 1px solid var(--glass-border);
+}
+
+.market-item.strong {
+    background: rgba(14, 165, 233, 0.07);
+    border-color: rgba(14, 165, 233, 0.22);
+}
+
+.market-label {
+    font-size: 0.64rem;
+    font-weight: 500;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+}
+
+.market-value {
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.market-item.strong .market-value {
+    color: var(--accent-blue);
+}
+
+/* Collapsible 9x9 grid */
+.sl-heatmap-wrap {
+    margin-top: 14px;
+    border-top: 1px solid var(--glass-border);
+    padding-top: 12px;
+}
+
+.sl-heatmap-wrap summary {
+    cursor: pointer;
+    font-size: 0.74rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    list-style: none;
+}
+
+.sl-heatmap-wrap summary::-webkit-details-marker {
+    display: none;
+}
+
+.sl-heatmap-wrap summary:hover {
+    color: var(--accent-blue);
+}
+
+.sl-heatmap-wrap summary i {
+    margin-right: 6px;
+    color: var(--accent-blue);
+}
+
+/* Keeps a wide grid inside the card on narrow screens — the page itself must
+   never scroll sideways. */
+.sl-heatmap-scroll {
+    overflow-x: auto;
+    margin-top: 12px;
+}
+
+.sl-heatmap {
+    border-collapse: collapse;
+    font-size: 0.62rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.sl-heatmap th {
+    padding: 3px 5px;
+    font-family: var(--font-display);
+    font-size: 0.6rem;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.sl-heatmap th.corner {
+    font-size: 0.55rem;
+    white-space: nowrap;
+}
+
+.sl-heatmap td {
+    min-width: 34px;
+    padding: 4px 5px;
+    text-align: center;
+    color: var(--text-secondary);
+    border: 1px solid rgba(0, 0, 0, 0.04);
+    /* --cell is 0..1, set per cell in buildHeatmap() */
+    background: rgba(14, 165, 233, calc(var(--cell) * 0.55));
+}
+
+.sl-heatmap td.peak {
+    outline: 2px solid var(--accent-purple);
+    outline-offset: -2px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.sl-heatmap-note {
+    margin-top: 8px;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
 /* ---------- Responsive ---------- */
 @media (min-width: 768px) {
-    .predictions-grid {
+    .predictions-grid,
+    .scorelines-grid {
         grid-template-columns: repeat(2, 1fr);
     }
 
@@ -816,7 +1149,8 @@ body {
 }
 
 @media (min-width: 1100px) {
-    .predictions-grid {
+    .predictions-grid,
+    .scorelines-grid {
         grid-template-columns: repeat(3, 1fr);
     }
 
@@ -851,6 +1185,13 @@ body {
     .team-name.home,
     .team-name.away {
         text-align: center;
+    }
+
+    /* Stacked on narrow screens, so centre both sides rather than
+       pushing the crests out to opposite edges. */
+    .card-team-side.home,
+    .card-team-side.away {
+        align-items: center;
     }
 
     .card-breakdown {
@@ -975,6 +1316,51 @@ body {
 [data-theme="dark"] .stat-card {
     background: rgba(255, 255, 255, 0.03);
     border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .scoreline-card {
+    background: var(--bg-card);
+    border-color: var(--glass-border);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] .scoreline-card:hover {
+    border-color: rgba(56, 189, 248, 0.3);
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.5), 0 0 20px rgba(56, 189, 248, 0.06);
+}
+
+[data-theme="dark"] .sl-header,
+[data-theme="dark"] .sl-heatmap-wrap {
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .sl-bar-track {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+[data-theme="dark"] .market-item {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] .market-item.strong {
+    background: rgba(56, 189, 248, 0.1);
+    border-color: rgba(56, 189, 248, 0.28);
+}
+
+[data-theme="dark"] .sl-heatmap td {
+    border-color: rgba(255, 255, 255, 0.05);
+    /* Brighter ceiling than light mode — the same alpha reads much fainter
+       against a dark ground. */
+    background: rgba(56, 189, 248, calc(var(--cell) * 0.7));
+}
+
+[data-theme="dark"] .tabs-header {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+}
+
+[data-theme="dark"] .tab-btn:hover {
+    background: rgba(56, 189, 248, 0.07);
 }
 
 [data-theme="dark"] .theme-toggle-btn {

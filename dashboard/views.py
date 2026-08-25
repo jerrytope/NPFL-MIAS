@@ -4,6 +4,7 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from dashboard import utils
 from dashboard.models import TeamComparisonReport
+from dashboard.team_logos import get_logo_url_map
 
 
 # The clubs eligible for selection in the current 2026/27 NPFL season.
@@ -39,7 +40,14 @@ def index(request):
     """
     Render main dashboard landing page.
     """
-    return render(request, 'dashboard/index.html', {'teams': NPFL_CLUBS_2026_2027})
+    return render(request, 'dashboard/index.html', {
+        'teams': NPFL_CLUBS_2026_2027,
+        # Resolved from the files actually on disk (dashboard/team_logos.py)
+        # rather than a hardcoded name->filename dict in the JS, which had
+        # drifted and served 404s for three clubs on the case-sensitive
+        # production filesystem.
+        'team_logos': get_logo_url_map(NPFL_CLUBS_2026_2027),
+    })
 
 @require_GET
 def compare_teams(request):

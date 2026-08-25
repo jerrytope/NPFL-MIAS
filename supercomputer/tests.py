@@ -3,8 +3,12 @@ from django.test import TestCase
 
 from dashboard.models import Team
 from supercomputer import ratings as ratings_module
-from supercomputer.models import Prediction, SeasonFixture, TeamCareerStats
-from supercomputer.poisson_model import expected_goals, score_probabilities
+from supercomputer.models import (
+    Prediction, SeasonFixture, TeamCareerStats, MatchDayVisibility,
+)
+from supercomputer.poisson_model import (
+    expected_goals, goal_markets, most_likely_scoreline, score_probabilities, top_scorelines,
+)
 from supercomputer.predictor import predict_match
 from supercomputer.ratings import compute_team_ratings, get_team_rating, LEAGUE_AVERAGE_RATIO
 from supercomputer.standings import calculate_standings
@@ -39,6 +43,52 @@ class ScoreProbabilitiesTests(TestCase):
         _, p_home, p_draw, p_away = score_probabilities(2.5, 0.6)
         self.assertGreater(p_home, p_away)
         self.assertGreater(p_home, p_draw)
+
+
+class TopScorelinesTests(TestCase):
+    def test_returns_requested_count_in_descending_probability_order(self):
+        grid, _, _, _ = score_probabilities(1.7, 0.5)
+        top = top_scorelines(grid, 5)
+
+        self.assertEqual(len(top), 5)
+        probs = [s['prob'] for s in top]
+        self.assertEqual(probs, sorted(probs, reverse=True))
+
+    def test_first_entry_matches_most_likely_scoreline(self):
+        grid, _, _, _ = score_probabilities(1.7, 0.5)
+        top = top_scorelines(grid, 5)[0]
+
+        self.assertEqual(
+            (top['home'], top['away'], top['prob']),
+            most_likely_scoreline(grid),
+        )
+
+
+class GoalMarketsTests(TestCase):
+    def test_complementary_markets_sum_to_one(self):
+        grid, _, _, _ = score_probabilities(1.6, 1.1)
+        markets = goal_markets(grid)
+
+        self.assertAlmostEqual(markets['over_2_5'] + markets['under_2_5'], 1.0, places=6)
+        self.assertAlmostEqual(markets['btts_yes'] + markets['btts_no'], 1.0, places=6)
+
+    def test_high_scoring_fixture_has_higher_over_2_5(self):
+        low_grid, _, _, _ = score_probabilities(0.8, 0.4)
+        high_grid, _, _, _ = score_probabilities(2.6, 1.8)
+
+        self.assertGreater(
+            goal_markets(high_grid)['over_2_5'],
+            goal_markets(low_grid)['over_2_5'],
+        )
+
+    def test_clean_sheet_probability_falls_as_opponent_attack_rises(self):
+        weak_opponent, _, _, _ = score_probabilities(1.5, 0.3)
+        strong_opponent, _, _, _ = score_probabilities(1.5, 1.9)
+
+        self.assertGreater(
+            goal_markets(weak_opponent)['home_clean_sheet'],
+            goal_markets(strong_opponent)['home_clean_sheet'],
+        )
 
 
 class ExpectedGoalsTests(CareerStatsCacheMixin, TestCase):
@@ -130,6 +180,172 @@ class PredictMatchTests(CareerStatsCacheMixin, TestCase):
         total = result['home_win_pct'] + result['draw_pct'] + result['away_win_pct']
         self.assertAlmostEqual(total, 100.0, places=1)
         self.assertIn(result['predicted_result'], ('HOME', 'DRAW', 'AWAY'))
+
+    def test_returns_a_normalised_scoreline_grid(self):
+        Team.objects.create(name='Alpha FC')
+        Team.objects.create(name='Beta FC')
+        ratings, league_h, league_a = compute_team_ratings(empty_match_df())
+        grid = predict_match('Alpha FC', 'Beta FC', ratings, league_h, league_a)['scoreline_grid']
+
+        self.assertEqual(len(grid), 9)
+        self.assertTrue(all(len(row) == 9 for row in grid))
+        self.assertAlmostEqual(sum(sum(row) for row in grid), 1.0, places=4)
+
+    def test_scoreline_grid_agrees_with_the_reported_win_percentages(self):
+        """The Scoreline Projections tab sums this grid; it must not contradict the cards."""
+        Team.objects.create(name='Alpha FC')
+        Team.objects.create(name='Beta FC')
+        ratings, league_h, league_a = compute_team_ratings(empty_match_df())
+        result = predict_match('Alpha FC', 'Beta FC', ratings, league_h, league_a)
+
+        grid = result['scoreline_grid']
+        home_win = sum(p for h, row in enumerate(grid) for a, p in enumerate(row) if h > a)
+        self.assertAlmostEqual(home_win * 100, result['home_win_pct'], places=0)
+
+
+class MatchDayLockTests(TestCase):
+    """
+    A locked match day must be unreachable from the public page by ANY route —
+    the unfiltered list, a team filter, or a direct ?match_day= request. This
+    replaced an automatic reveal rule that only hid the dropdown, leaving the
+    whole season readable via "All Match Days".
+
+    The one deliberate exception is season_totals, which spans every fixture
+    regardless of lock state (see views._season_totals).
+    """
+
+    def setUp(self):
+        self.alpha = Team.objects.create(name='Alpha FC')
+        self.beta = Team.objects.create(name='Beta FC')
+        self.gamma = Team.objects.create(name='Gamma FC')
+
+        for md, (home, away) in enumerate(
+            [(self.alpha, self.beta), (self.beta, self.alpha),
+             (self.alpha, self.gamma), (self.gamma, self.alpha)], start=1):
+            self._fixture(md, home, away)
+
+        # Only Match Day 1 published; 2, 3 locked; 4 has NO row at all.
+        MatchDayVisibility.objects.create(season='26/27', match_day=1, is_unlocked=True)
+        MatchDayVisibility.objects.create(season='26/27', match_day=2, is_unlocked=False)
+        MatchDayVisibility.objects.create(season='26/27', match_day=3, is_unlocked=False)
+
+    def _fixture(self, match_day, home, away):
+        fixture = SeasonFixture.objects.create(
+            season='26/27', match_day=match_day, home=home, away=away,
+        )
+        Prediction.objects.create(
+            fixture=fixture, home_win_pct=50.0, draw_pct=30.0, away_win_pct=20.0,
+            predicted_result='HOME', confidence=50.0,
+            scoreline_grid=[[0.5, 0.2, 0.0], [0.2, 0.1, 0.0], [0.0, 0.0, 0.0]],
+        )
+        return fixture
+
+    def _match_days(self, url):
+        return sorted({r['match_day'] for r in self.client.get(url).json()['results']})
+
+    def test_unfiltered_request_returns_only_published_match_days(self):
+        self.assertEqual(self._match_days('/supercomputer/api/predictions/'), [1])
+        self.assertEqual(self._match_days('/supercomputer/api/scorelines/'), [1])
+
+    def test_team_filter_cannot_reach_locked_match_days(self):
+        """Alpha plays in all four match days; only the published one may show."""
+        self.assertEqual(self._match_days('/supercomputer/api/predictions/?team=Alpha FC'), [1])
+        self.assertEqual(self._match_days('/supercomputer/api/scorelines/?team=Alpha FC'), [1])
+
+    def test_requesting_a_locked_match_day_directly_returns_nothing(self):
+        for md in (2, 3):
+            self.assertEqual(self.client.get(f'/supercomputer/api/predictions/?match_day={md}').json()['count'], 0)
+            self.assertEqual(self.client.get(f'/supercomputer/api/scorelines/?match_day={md}').json()['count'], 0)
+
+    def test_match_day_with_no_visibility_row_is_treated_as_locked(self):
+        """MD4 has no MatchDayVisibility row — absent must mean locked, not open."""
+        self.assertNotIn(4, self._match_days('/supercomputer/api/predictions/'))
+        self.assertEqual(self.client.get('/supercomputer/api/predictions/?match_day=4').json()['count'], 0)
+
+    def test_non_contiguous_unlocks_are_honoured(self):
+        """The admin can publish in any order — 1 and 3 open, 2 still closed."""
+        MatchDayVisibility.objects.filter(match_day=3).update(is_unlocked=True)
+        self.assertEqual(self._match_days('/supercomputer/api/predictions/'), [1, 3])
+        self.assertEqual(self._match_days('/supercomputer/api/scorelines/'), [1, 3])
+        self.assertEqual(
+            self.client.get('/supercomputer/api/predictions/').json()['unlocked_match_days'],
+            [1, 3],
+        )
+
+    def test_season_totals_span_every_fixture_including_locked_ones(self):
+        totals = self.client.get('/supercomputer/api/predictions/').json()['season_totals']
+        self.assertEqual(totals['games'], 4)      # all four, though only one is published
+        self.assertEqual(totals['home'], 2)       # 4 x 50% = 2.0 expected home wins
+        self.assertEqual(totals['draw'], 1)       # 4 x 30% = 1.2
+        self.assertEqual(totals['away'], 1)       # 4 x 20% = 0.8
+
+    def test_locking_everything_hides_all_fixtures(self):
+        MatchDayVisibility.objects.update(is_unlocked=False)
+        payload = self.client.get('/supercomputer/api/predictions/').json()
+        self.assertEqual(payload['count'], 0)
+        self.assertEqual(payload['unlocked_match_days'], [])
+        # ...but the season totals still know about the full season, so the UI
+        # can tell "nothing published yet" apart from "no predictions exist".
+        self.assertEqual(payload['season_totals']['games'], 4)
+
+    def test_both_tabs_return_the_same_fixture_set(self):
+        for url in ('', '?team=Alpha FC', '?match_day=1', '?match_day=2'):
+            self.assertEqual(
+                self._match_days(f'/supercomputer/api/predictions/{url}'),
+                self._match_days(f'/supercomputer/api/scorelines/{url}'),
+                msg=f'tabs disagree for {url!r}',
+            )
+
+
+class PublicApiPayloadTests(TestCase):
+    """
+    What the public APIs expose per fixture: crest URLs in, and the internal
+    `manually_edited` flag out.
+    """
+
+    def setUp(self):
+        home = Team.objects.create(name='Doma United')      # crest is 'Doma United.png'
+        away = Team.objects.create(name='Nonexistent Rovers')  # deliberately has none
+        fixture = SeasonFixture.objects.create(
+            season='26/27', match_day=1, home=home, away=away,
+        )
+        Prediction.objects.create(
+            fixture=fixture, home_win_pct=50.0, draw_pct=30.0, away_win_pct=20.0,
+            predicted_result='HOME', confidence=50.0,
+            manually_edited=True,   # the flag that must NOT reach the public
+            scoreline_grid=[[0.5, 0.2, 0.0], [0.2, 0.1, 0.0], [0.0, 0.0, 0.0]],
+        )
+        MatchDayVisibility.objects.create(season='26/27', match_day=1, is_unlocked=True)
+
+    def _rows(self):
+        return [
+            self.client.get('/supercomputer/api/predictions/').json()['results'][0],
+            self.client.get('/supercomputer/api/scorelines/').json()['results'][0],
+        ]
+
+    def test_both_apis_include_crest_urls(self):
+        for row in self._rows():
+            self.assertIsNotNone(row['home_logo'])
+            self.assertIn('Doma%20United.png', row['home_logo'])
+
+    def test_club_without_a_crest_gets_null_not_a_broken_path(self):
+        """Null lets the UI fall back to an initials badge instead of a 404 image."""
+        for row in self._rows():
+            self.assertIsNone(row['away_logo'])
+
+    def test_manually_edited_is_never_exposed_publicly(self):
+        """
+        Hiding only the UI note would leave the flag one devtools tab away, so
+        the field must be absent from the payload entirely.
+        """
+        for row in self._rows():
+            self.assertNotIn('manually_edited', row)
+
+    def test_admin_panel_still_sees_the_edited_flag(self):
+        """Removing it from the public API must not blind the admin to it."""
+        from admin_panel.views import _build_predictions_data
+        rows = _build_predictions_data(Prediction.objects.all())
+        self.assertTrue(rows[0]['manually_edited'])
 
 
 class StandingsExpectedPointsTests(TestCase):
