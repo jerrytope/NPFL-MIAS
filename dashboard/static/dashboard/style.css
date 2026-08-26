@@ -70,7 +70,7 @@ body {
 }
 
 .header-main-logo {
-    height: 48px;
+    height: 72px;
     width: auto;
     object-fit: contain;
     filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.1));
@@ -1247,3 +1247,25 @@ body {
     }
 }
 
+.site-footer {
+    text-align: center;
+    padding: 20px;
+    margin-top: 30px;
+    font-size: 14px;
+    color: #6b7280;
+    border-top: 1px solid #e5e7eb;
+}
+
+.site-footer a {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.site-footer a:hover {
+    text-decoration: underline;
+}
+
+.footer-separator {
+    margin: 0 10px;
+}
