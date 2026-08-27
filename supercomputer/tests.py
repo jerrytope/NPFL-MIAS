@@ -12,22 +12,18 @@ from supercomputer.poisson_model import (
 from supercomputer.predictor import predict_match
 from supercomputer.ratings import compute_team_ratings, get_team_rating, LEAGUE_AVERAGE_RATIO
 from supercomputer.standings import calculate_standings
+from django.urls import reverse
+from django.contrib.auth.models import User
+from pathlib import Path
 
 
 def empty_match_df():
     return pd.DataFrame(columns=['season', 'home', 'away', 'home_goal', 'away_goal'])
 
 
-class CareerStatsCacheMixin:
-    """Reset ratings.py's in-process TeamCareerStats cache before each test."""
-
-    def setUp(self):
-        ratings_module._CAREER_STATS_CACHE = None
-        super().setUp()
-
-    def tearDown(self):
-        ratings_module._CAREER_STATS_CACHE = None
-        super().tearDown()
+# CareerStatsCacheMixin used to live here, resetting ratings.py's in-process
+# TeamCareerStats memo between tests. That memo is gone — career stats are read
+# from the database on every call — so there is nothing left to reset.
 
 
 class ScoreProbabilitiesTests(TestCase):
@@ -91,7 +87,7 @@ class GoalMarketsTests(TestCase):
         )
 
 
-class ExpectedGoalsTests(CareerStatsCacheMixin, TestCase):
+class ExpectedGoalsTests(TestCase):
     def test_better_attack_rating_produces_higher_lambda(self):
         ratings = {
             'Strong': ratings_module.TeamRating(home_attack=1.8, home_defense=1.0, away_attack=1.5, away_defense=1.0),
@@ -107,7 +103,7 @@ class ExpectedGoalsTests(CareerStatsCacheMixin, TestCase):
         self.assertEqual(rating.away_defense, LEAGUE_AVERAGE_RATIO)
 
 
-class ComputeTeamRatingsTests(CareerStatsCacheMixin, TestCase):
+class ComputeTeamRatingsTests(TestCase):
     def setUp(self):
         super().setUp()
         # A small, self-consistent league: two seasons, three teams
@@ -160,7 +156,7 @@ class ComputeTeamRatingsTests(CareerStatsCacheMixin, TestCase):
         self.assertGreater(rating.home_attack, LEAGUE_AVERAGE_RATIO)
 
 
-class PredictMatchTests(CareerStatsCacheMixin, TestCase):
+class PredictMatchTests(TestCase):
     def test_percentages_sum_to_100_with_no_data_for_either_team(self):
         Team.objects.create(name='Alpha FC')
         Team.objects.create(name='Beta FC')
@@ -393,3 +389,123 @@ class StandingsExpectedPointsTests(TestCase):
         # = 3.85, rounds to 3.8 at the 1-decimal display precision standings.py returns.
         self.assertAlmostEqual(team_a_row['points'], 3.8, places=1)
         self.assertEqual(team_a_row['played'], 2)
+
+
+class DownloadButtonTests(TestCase):
+    """
+    The prediction and scoreline cards are built in JavaScript, not by a
+    template loop, so the admin flag has to be handed to the page rather than
+    wrapped around markup. These guard that plumbing.
+    """
+
+    def _html(self):
+        return self.client.get(reverse('supercomputer:index')).content.decode()
+
+    def test_admin_flag_is_false_for_the_public(self):
+        self.assertIn('<script id="is-admin" type="application/json">false</script>', self._html())
+
+    def test_admin_flag_is_true_once_signed_in(self):
+        User.objects.create_user(username='owner', password='OwnerPass!2026')
+        self.client.login(username='owner', password='OwnerPass!2026')
+        self.assertIn('<script id="is-admin" type="application/json">true</script>', self._html())
+
+    def test_export_libraries_are_loaded(self):
+        html = self._html()
+        self.assertIn('html2canvas', html)
+        self.assertIn('png_export.js', html)
+
+    def test_cards_carry_the_id_the_exporter_needs(self):
+        """
+        The exporter finds a card by id. Both builders derive that id from the
+        Prediction primary key, so the API must keep returning it.
+        """
+        js = (
+            Path(__file__).resolve().parent / 'static' / 'supercomputer' / 'script.js'
+        ).read_text(encoding='utf-8')
+        self.assertIn('card.id = `prediction-card-${p.id}`', js)
+        self.assertIn('card.id = `scoreline-card-${s.id}`', js)
+        self.assertIn('downloadButton(', js)
+
+    def test_both_card_types_anchor_their_download_button(self):
+        """
+        .card-download-btn is position:absolute, so its card must be a
+        positioned ancestor. .scoreline-card was not, and the button rendered
+        into the DOM but appeared nowhere near the card — present in the HTML,
+        invisible on the page, which no markup assertion would have caught.
+        """
+        import re
+
+        css = (
+            Path(__file__).resolve().parent / 'static' / 'supercomputer' / 'style.css'
+        ).read_text(encoding='utf-8')
+
+        for selector in ('.prediction-card', '.scoreline-card'):
+            block = re.search(
+                re.escape(selector) + r'\s*\{(.*?)\}', css, re.S
+            )
+            self.assertIsNotNone(block, selector + ' rule not found')
+            self.assertIn(
+                'position: relative', block.group(1),
+                selector + ' must be positioned or its download button floats away',
+            )
+
+    def test_the_button_is_absolutely_positioned(self):
+        css = (
+            Path(__file__).resolve().parent / 'static' / 'supercomputer' / 'style.css'
+        ).read_text(encoding='utf-8')
+        self.assertIn('.card-download-btn', css)
+
+    def test_buttons_use_data_attributes_not_inline_onclick(self):
+        """
+        The filename label is a club name. Interpolated into an inline
+        handler attribute it would break on any name containing an
+        apostrophe, and the hand-written escape that used to be there did
+        nothing at all: in JavaScript a backslash-quote inside a
+        double-quoted string is just a quote. Delegation via data
+        attributes removes the whole class of bug.
+        """
+        import re
+
+        js = (
+            Path(__file__).resolve().parent / 'static' / 'supercomputer' / 'script.js'
+        ).read_text(encoding='utf-8')
+
+        # Strip block and line comments, which discuss the attribute by name.
+        code = re.sub(r'/\*.*?\*/', '', js, flags=re.S)
+        code = re.sub(r'^\s*//.*$', '', code, flags=re.M)
+
+        # No inline handler belongs on a card button. Checked across the
+        # whole file rather than per line: the button is a multi-line
+        # template literal, so a stray handler can easily sit on a
+        # different line from the class name.
+        self.assertNotIn(
+            'onclick=', code,
+            'an inline onclick handler crept back into the Super Computer JS',
+        )
+        self.assertIn('data-dl-label', code)
+        self.assertIn("closest('.card-download-btn')", code)
+
+
+class CareerStatsFreshnessTests(TestCase):
+    """
+    get_all_career_stats used to memoise in a module global with no way to
+    invalidate it, so running import_career_stats did nothing until the server
+    restarted. It now reads the database every call.
+    """
+
+    def test_a_newly_imported_team_is_visible_without_a_restart(self):
+        from dashboard.models import Team
+        from supercomputer.models import TeamCareerStats
+
+        self.assertEqual(ratings_module.get_all_career_stats(), {})
+
+        team = Team.objects.create(name='Freshness FC')
+        TeamCareerStats.objects.create(
+            team=team, parts=2, played=10,
+            home_win=3, home_draw=1, home_loss=1,
+            away_win=2, away_draw=2, away_loss=1,
+            home_gf=9, home_ga=4, away_gf=6, away_ga=6,
+        )
+
+        stats = ratings_module.get_all_career_stats()
+        self.assertIn('freshness fc', stats)

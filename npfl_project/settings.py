@@ -51,10 +51,17 @@ INSTALLED_APPS = [
     'admin_panel',
 ]
 
+# Caching is deliberately off. This was a LocMemCache holding the whole Match
+# table for 24 hours, which meant edits took a day to show — and because LocMem
+# is per-process, one gunicorn worker could keep serving stale rows after
+# another had been refreshed.
+#
+# DummyCache rather than deleting this block: with no CACHES setting at all,
+# Django falls back to LocMem again, so removing it would quietly restore the
+# very thing being removed.
 CACHES = {
     'default': {
-        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-        'LOCATION': 'npfl-sheets-cache',
+        'BACKEND': 'django.core.cache.backends.dummy.DummyCache',
     }
 }
 

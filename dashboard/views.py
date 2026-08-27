@@ -121,13 +121,18 @@ def generate_report(request):
 @require_GET
 def refresh_data(request):
     """
-    JSON API endpoint to refresh the cached DB-derived NPFL data.
+    Re-read the match data and confirm it loads.
+
+    There is no cache to clear any more — every request reads the database
+    fresh. The endpoint is kept because the UI calls it, and it still does
+    something useful: it surfaces a broken or empty Match table as an error
+    instead of leaving the page silently blank.
     """
     try:
-        utils.get_npfl_data(force_refresh=True)
+        df = utils.get_npfl_data()
         return JsonResponse({
             'status': 'success',
-            'message': 'Database-derived NPFL cache refreshed successfully!'
+            'message': f'Loaded {len(df):,} matches from the database.'
         })
     except Exception as e:
         return JsonResponse({'error': f'Failed to refresh data: {str(e)}'}, status=500)

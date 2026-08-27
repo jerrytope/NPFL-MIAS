@@ -896,6 +896,11 @@ body {
     padding: 20px;
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
     transition: var(--transition);
+    /* Needed so the absolutely-positioned download button anchors to this card
+       rather than to the page. .prediction-card already had it; this one did
+       not, which is why the button rendered into the DOM but appeared nowhere
+       near its card. */
+    position: relative;
 }
 
 .scoreline-card:hover {
@@ -1404,4 +1409,39 @@ body {
 
 .footer-separator {
     margin: 0 10px;
+}
+/* ==========================================================================
+   Admin-only "Download PNG" button on prediction and scoreline cards
+   Ported from dashboard/style.css, with --border-color and --accent-color
+   remapped to this palette's --glass-border and --accent-blue. Without the
+   remap the var() fallbacks kick in silently and the button looks off-brand.
+   The button is hidden inside the html2canvas clone (see png_export.js), so
+   it never appears in the exported image.
+   ========================================================================== */
+.download-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    border: 1px solid var(--glass-border);
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    z-index: 3;
+}
+
+.download-btn:hover {
+    color: var(--accent-blue);
+    border-color: var(--accent-blue);
+}
+
+/* Cards are position:relative already, so the button parks in the corner
+   without disturbing the card's own layout. */
+.card-download-btn {
+    position: absolute;
+    top: 12px;
+    right: 12px;
 }

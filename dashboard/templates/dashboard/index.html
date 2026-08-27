@@ -17,7 +17,7 @@
     <div class="header-actions">
         <div class="sync-status" id="syncStatus">
             <span class="status-dot green"></span>
-            <span class="status-text">Cache Synced</span>
+            <span class="status-text">Live Data</span>
         </div>
         <button class="theme-toggle-btn" id="themeToggle" title="Switch to dark mode">
             <i class="fas fa-moon"></i>
@@ -83,7 +83,19 @@
     <!-- Comparison Results View (Hidden by default) -->
     <div class="comparison-results-wrapper" id="comparisonResults" style="display: none;">
         
-        <!-- KPI Row -->
+        <!-- Match Summary: KPIs + recent form, wrapped so the admin download
+             captures the whole block as one social-media image. -->
+        <section class="summary-capture" id="matchSummaryCapture">
+            <div class="summary-capture-head">
+                <h3 class="summary-capture-title">Head-to-Head Summary</h3>
+                {% if user.is_authenticated %}
+                <button class="download-btn download-btn-inline" title="Download PNG"
+                        onclick="downloadElementAsPNG('matchSummaryCapture', 'match-summary')">
+                    <i class="fa-solid fa-download"></i>
+                </button>
+                {% endif %}
+            </div>
+
         <div class="kpi-row">
             <div class="card kpi-card glassmorphic">
                 <div class="kpi-icon-box yellow">
@@ -125,6 +137,24 @@
                 </div>
             </div>
         </div>
+
+            <!-- Last 5 for each side. Data already ships in the /compare/
+                 response as team1_form / team2_form. -->
+            <div class="summary-form-strip">
+                <div class="summary-form-team">
+                    <span class="summary-form-name" id="summaryT1Name">Team 1</span>
+                    <span class="form-badges" id="summaryT1Form"></span>
+                </div>
+                <div class="summary-form-divider" aria-hidden="true"></div>
+                <div class="summary-form-team">
+                    <span class="summary-form-name" id="summaryT2Name">Team 2</span>
+                    <span class="form-badges" id="summaryT2Form"></span>
+                </div>
+            </div>
+            <p class="summary-form-note">Last 5 league matches &middot; most recent on the right</p>
+
+            <div class="watermark-overlay"></div>
+        </section>
 
         <!-- Team Profile & Form Summary -->
         <div class="profiles-container">

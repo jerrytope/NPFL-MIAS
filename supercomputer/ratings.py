@@ -48,20 +48,18 @@ TeamRating = namedtuple('TeamRating', [
     'home_attack', 'home_defense', 'away_attack', 'away_defense',
 ])
 
-_CAREER_STATS_CACHE = None
-
 
 def get_all_career_stats():
-    """{team_name_lower: TeamCareerStats}, cached in-process for this worker."""
-    global _CAREER_STATS_CACHE
-    if _CAREER_STATS_CACHE is not None:
-        return _CAREER_STATS_CACHE
+    """{team_name_lower: TeamCareerStats}, read fresh from the database.
 
-    stats = {}
-    for cs in TeamCareerStats.objects.select_related('team').all():
-        stats[cs.team.name.lower()] = cs
-    _CAREER_STATS_CACHE = stats
-    return _CAREER_STATS_CACHE
+    This used to be memoised in a module global with no way to invalidate it,
+    so running import_career_stats appeared to do nothing until the server was
+    restarted. There are ~75 rows; the query costs far less than that confusion.
+    """
+    return {
+        cs.team.name.lower(): cs
+        for cs in TeamCareerStats.objects.select_related('team').all()
+    }
 
 
 def get_team_career_stats(team_name):

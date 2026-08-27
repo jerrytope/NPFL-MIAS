@@ -21,6 +21,11 @@
     <link rel="stylesheet" href="{% static 'supercomputer/style.css' %}">
     <!-- Theme toggle (loaded early to prevent flash) -->
     <script src="{% static 'theme.js' %}"></script>
+
+    <!-- html2canvas + the shared exporter power the admin "Download PNG"
+         buttons on the prediction and scoreline cards. -->
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="{% static 'png_export.js' %}"></script>
 </head>
 
 <body>
@@ -205,6 +210,7 @@
     </footer>
 
     <!-- Super Computer JS -->
+    {{ is_admin|json_script:"is-admin" }}
     <script src="{% static 'supercomputer/script.js' %}"></script>
 </body>
 

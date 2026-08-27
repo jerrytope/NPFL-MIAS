@@ -405,7 +405,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .then(data => {
                 // Restore status indicator
                 dot.className = 'status-dot green';
-                txt.innerText = 'Cache Synced';
+                txt.innerText = 'Live Data';
 
                 // Display results view, hide placeholder
                 placeholderCard.style.display = 'none';
@@ -417,7 +417,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .catch(err => {
                 dot.className = 'status-dot green';
-                txt.innerText = 'Cache Synced';
+                txt.innerText = 'Live Data';
                 showError(err.message);
                 placeholderCard.style.display = 'block';
                 resultsWrapper.style.display = 'none';
@@ -436,6 +436,14 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('kpiTeam2Wins').innerText = data.team2_wins;
         document.getElementById('kpiTeam2WinsLabel').innerText = `${t2} Wins`;
         document.getElementById('kpiDraws').innerText = data.draws;
+
+        // Last-5 strip inside the summary block. Reuses renderFormBadges and
+        // the team1_form / team2_form the /compare/ response already returns —
+        // no extra request, no extra query.
+        document.getElementById('summaryT1Name').innerText = t1;
+        document.getElementById('summaryT2Name').innerText = t2;
+        renderFormBadges(document.getElementById('summaryT1Form'), data.team1_form);
+        renderFormBadges(document.getElementById('summaryT2Form'), data.team2_form);
 
         // Profiles Headers
         document.getElementById('t1Name').innerText = t1;
@@ -759,38 +767,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 /* ==========================================================================
    Admin-only PNG downloads (chart cards / table screenshots)
-   Deliberately defined OUTSIDE the DOMContentLoaded closure above, so the
-   onclick="" attributes on the download buttons (dashboard/index.html) —
-   which run in global scope — can call it directly.
+
+   The implementation moved to logos/png_export.js (served at
+   /static/png_export.js) so the Super Computer page — a separate standalone
+   document with no shared base template — gets exactly the same behaviour
+   instead of a divergent copy.
+
+   That shared version also fixes three things this one got wrong: it hid
+   nothing, so the download button appeared inside every exported chart; it
+   captured dark-theme cards onto a white canvas, giving white-on-white; and it
+   did not wait for lazy-loaded crests to decode.
+
+   Nothing here calls it directly — the onclick="" attributes in
+   dashboard/index.html reach window.downloadElementAsPNG in global scope.
    ========================================================================== */
-function downloadElementAsPNG(elementId, filenamePrefix) {
-    const element = document.getElementById(elementId);
-    if (!element || typeof html2canvas === 'undefined') return;
-
-    const t1El = document.getElementById('t1Name');
-    const t2El = document.getElementById('t2Name');
-    const slugify = (s) => s.trim().replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
-    const teamsPart = (t1El && t2El) ? `${slugify(t1El.innerText)}-vs-${slugify(t2El.innerText)}-` : '';
-
-    // backgroundColor: '#ffffff' — always a solid white background, regardless
-    // of the current theme (dark mode) or the card's own semi-transparent
-    // "glassmorphic" background, which html2canvas can't reproduce anyway
-    // (it doesn't support backdrop-filter blur).
-    // useCORS: true — lets html2canvas load cross-origin assets (Google Fonts)
-    // with proper CORS instead of tainting the canvas, which silently breaks
-    // canvas.toDataURL() in Chrome specifically.
-    html2canvas(element, { backgroundColor: '#ffffff', scale: 2, useCORS: true }).then(canvas => {
-        const link = document.createElement('a');
-        link.download = `${teamsPart}${filenamePrefix}.png`;
-        link.href = canvas.toDataURL('image/png');
-        // Chrome requires the anchor to actually be in the DOM for a
-        // programmatic .click() + download attribute to reliably trigger —
-        // it's removed again right after.
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-    }).catch(err => {
-        console.error('Failed to generate download image:', err);
-        alert('Could not generate the download image. Please try again.');
-    });
-}

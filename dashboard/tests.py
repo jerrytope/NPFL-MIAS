@@ -95,11 +95,20 @@ class DashboardViewsTests(TestCase):
         self.assertIn('error', response.json())
 
     @patch('dashboard.utils.get_npfl_data')
-    def test_refresh_data_clears_and_refetches_cache(self, mock_get_data):
+    def test_refresh_data_reports_how_many_matches_loaded(self, mock_get_data):
+        """There is no cache left to clear; the endpoint now just proves the
+        data loads and says how much of it there is."""
         mock_get_data.return_value = SAMPLE_DATA
         response = self.client.get(reverse('dashboard:refresh_data'))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()['status'], 'success')
+        self.assertIn(str(len(SAMPLE_DATA)), response.json()['message'])
+
+    @patch('dashboard.utils.get_npfl_data', side_effect=ValueError('No match data available'))
+    def test_refresh_data_surfaces_an_empty_table(self, mock_get_data):
+        response = self.client.get(reverse('dashboard:refresh_data'))
+        self.assertEqual(response.status_code, 500)
+        self.assertIn('error', response.json())
 
 
 class TeamLogoResolverTests(TestCase):
@@ -142,3 +151,110 @@ class TeamLogoResolverTests(TestCase):
         urls = team_logos.get_logo_url_map(['Doma United', 'Nonexistent Rovers'])
         self.assertIsNotNone(urls['doma united'])
         self.assertIsNone(urls['nonexistent rovers'])
+
+
+class NoCachingTests(TestCase):
+    """
+    The dashboard used to hold the whole Match table in a 24-hour LocMem cache,
+    so an edit took a day to appear — and because LocMem is per-process, one
+    gunicorn worker could keep serving stale rows after another was refreshed.
+    These guard against it coming back.
+    """
+
+    def test_cache_backend_stores_nothing(self):
+        from django.core.cache import cache
+        cache.set('canary', 'value')
+        self.assertIsNone(
+            cache.get('canary'),
+            'CACHES is not the dummy backend — something will start caching again.',
+        )
+
+    def test_get_npfl_data_sees_a_new_match_immediately(self):
+        """The behaviour the whole change exists for: no restart, no wait."""
+        from dashboard.models import Match, Team
+
+        home = Team.objects.create(name='Cache Test United')
+        away = Team.objects.create(name='Cache Test City')
+        Match.objects.create(season='25/26', home=home, away=away,
+                             home_goal=1, away_goal=0)
+
+        first = utils.get_npfl_data()
+        self.assertEqual(len(first), 1)
+
+        Match.objects.create(season='25/26', home=away, away=home,
+                             home_goal=3, away_goal=2)
+
+        second = utils.get_npfl_data()
+        self.assertEqual(len(second), 2, 'a newly inserted match was not picked up')
+
+    def test_rows_come_back_in_insertion_order(self):
+        """
+        Chronology here is insertion order — the Excel import loads matches in
+        match order and the admin appends new results. Match.date is empty, so
+        it cannot be used. An unordered queryset has no guaranteed SQL order,
+        which would silently scramble every 'last 5' form guide.
+        """
+        from dashboard.models import Match, Team
+
+        a = Team.objects.create(name='Alpha FC')
+        b = Team.objects.create(name='Beta FC')
+        for goals in range(5):
+            Match.objects.create(season='25/26', home=a, away=b,
+                                 home_goal=goals, away_goal=0)
+
+        df = utils.get_npfl_data()
+        self.assertEqual(
+            list(df['home_goal']), [0, 1, 2, 3, 4],
+            'rows did not come back in insertion order',
+        )
+
+    def test_form_puts_the_most_recent_match_last(self):
+        """The last letter of the form string is the latest result."""
+        from dashboard.models import Match, Team
+
+        a = Team.objects.create(name='Alpha FC')
+        b = Team.objects.create(name='Beta FC')
+        # Four wins, then a loss — the loss is the most recent.
+        for _ in range(4):
+            Match.objects.create(season='25/26', home=a, away=b, home_goal=2, away_goal=0)
+        Match.objects.create(season='25/26', home=b, away=a, home_goal=1, away_goal=0)
+
+        df = utils.get_npfl_data()
+        form, games = utils.get_team_form(df, 'Alpha FC')
+
+        self.assertEqual(form, 'WWWWL')
+        self.assertEqual(games[-1]['result'], 'L')
+        self.assertEqual(games[-1]['home'], 'Beta FC')
+
+
+class MatchSummaryBlockTests(TestCase):
+    """The summary block the admin downloads as one social-media image."""
+
+    def test_block_and_form_containers_render(self):
+        html = self.client.get(reverse('dashboard:index')).content.decode()
+        self.assertIn('id="matchSummaryCapture"', html)
+        self.assertIn('id="summaryT1Form"', html)
+        self.assertIn('id="summaryT2Form"', html)
+        self.assertIn('id="kpiTotalMatches"', html)
+
+    def test_download_button_is_hidden_from_the_public(self):
+        html = self.client.get(reverse('dashboard:index')).content.decode()
+        self.assertNotIn('match-summary', html)
+
+    def test_download_button_appears_for_a_signed_in_admin(self):
+        from django.contrib.auth.models import User
+        User.objects.create_user(username='owner', password='OwnerPass!2026')
+        self.client.login(username='owner', password='OwnerPass!2026')
+
+        html = self.client.get(reverse('dashboard:index')).content.decode()
+        self.assertIn("downloadElementAsPNG('matchSummaryCapture', 'match-summary')", html)
+
+    def test_the_shared_exporter_is_loaded(self):
+        html = self.client.get(reverse('dashboard:index')).content.decode()
+        self.assertIn('png_export.js', html)
+        self.assertIn('html2canvas', html)
+
+    def test_the_cache_label_is_gone(self):
+        html = self.client.get(reverse('dashboard:index')).content.decode()
+        self.assertNotIn('Cache Synced', html)
+        self.assertIn('Live Data', html)

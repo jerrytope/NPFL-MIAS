@@ -63,18 +63,16 @@ DEFAULT_TRANSFER_METRICS = {
     'Warri Wolves': 3.0,
 }
 
-_TRANSFER_CACHE = None
-
 
 def get_all_transfer_metrics():
     """
     Load transfer metrics dictionary {team_name: float_metric} from plans file if present,
     falling back to DEFAULT_TRANSFER_METRICS.
-    """
-    global _TRANSFER_CACHE
-    if _TRANSFER_CACHE is not None:
-        return _TRANSFER_CACHE
 
+    Read from the file on every call. This used to be memoised in a module
+    global with no invalidation, so editing the transfer metrics workbook had
+    no effect until the server restarted.
+    """
     metrics = dict(DEFAULT_TRANSFER_METRICS)
 
     base_dir = getattr(settings, 'BASE_DIR', Path(__file__).resolve().parent.parent)
@@ -103,8 +101,7 @@ def get_all_transfer_metrics():
         except Exception:
             pass
 
-    _TRANSFER_CACHE = metrics
-    return _TRANSFER_CACHE
+    return metrics
 
 
 def get_team_transfer_rating(team_name):

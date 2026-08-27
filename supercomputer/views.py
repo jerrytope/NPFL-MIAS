@@ -86,6 +86,14 @@ def index(request):
     context = {
         'prediction_count': prediction_count,
         'total_match_days': total_match_days,
+        # The cards are built in JavaScript, not by a template loop, so a
+        # {% if %} around a button would never reach one. The flag is handed to
+        # the page instead and read once in script.js.
+        #
+        # "admin" here means authenticated, matching the convention used
+        # everywhere else in this project (admin_panel gates its views with a
+        # bare @login_required; there is no is_staff check anywhere).
+        'is_admin': request.user.is_authenticated,
     }
     return render(request, 'supercomputer/index.html', context)
 

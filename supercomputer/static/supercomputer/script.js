@@ -16,6 +16,55 @@ let allScorelines = [];
 let filteredScorelines = [];
 let scorelinesLoaded = false;
 
+// Whether to show the admin "Download PNG" buttons. Handed over by the view
+// via {{ is_admin|json_script:"is-admin" }} — the cards are built here in JS,
+// not by a template loop, so a {% if %} in the template could never reach one.
+const IS_ADMIN = (() => {
+    const el = document.getElementById('is-admin');
+    try {
+        return el ? JSON.parse(el.textContent) === true : false;
+    } catch (e) {
+        return false;
+    }
+})();
+
+/* The button markup for a card. Empty for anyone not signed in, so the
+   download simply does not exist rather than being hidden with CSS.
+
+   The filename label travels in a data attribute rather than being
+   interpolated into an inline onclick="". A club name containing an apostrophe
+   would otherwise close the JS string inside that attribute and break the
+   button, and hand-escaping it is the kind of thing that looks right and
+   silently is not. Delegation removes the problem instead of patching it. */
+function escapeAttr(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
+function downloadButton(kind, id, label) {
+    if (!IS_ADMIN) return '';
+    return `<button type="button" class="download-btn card-download-btn"
+                    title="Download PNG" aria-label="Download this card as an image"
+                    data-dl-kind="${kind}" data-dl-id="${id}" data-dl-label="${escapeAttr(label)}">
+                <i class="fa-solid fa-download"></i>
+            </button>`;
+}
+
+/* One listener covers every card, including any rendered later. */
+document.addEventListener('click', (event) => {
+    const btn = event.target.closest('.card-download-btn');
+    if (!btn) return;
+
+    const kind = btn.dataset.dlKind;
+    const card = document.getElementById(`${kind}-card-${btn.dataset.dlId}`);
+    if (card && typeof window.downloadElementAsPNG === 'function') {
+        window.downloadElementAsPNG(card, kind, btn.dataset.dlLabel || '');
+    }
+});
+
 // ---------- DOM Elements ----------
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
@@ -374,6 +423,8 @@ function getTeamRelativeResult(p, team) {
 function createPredictionCard(p) {
     const card = document.createElement('div');
     card.className = 'prediction-card';
+    // A stable id so the PNG exporter can find this exact card.
+    card.id = `prediction-card-${p.id}`;
     if (p.confidence >= 60) card.classList.add('high-confidence');
 
     const confidenceLevel = p.confidence >= 60 ? 'High' : p.confidence >= 40 ? 'Medium' : 'Low';
@@ -383,7 +434,10 @@ function createPredictionCard(p) {
     const teamResult = getTeamRelativeResult(p, selectedTeam);
     const teamResultClass = teamResult === 'WIN' ? 'team-win' : teamResult === 'LOSS' ? 'team-loss' : 'team-draw';
 
+    const dlLabel = `${p.home}-vs-${p.away}-md${p.match_day}`;
+
     card.innerHTML = `
+        ${downloadButton('prediction', p.id, dlLabel)}
         <div class="card-match-day">Match Day ${p.match_day}</div>
         <div class="card-teams">
             <div class="card-team-side home">
@@ -526,6 +580,8 @@ function renderScorelines() {
 function createScorelineCard(s) {
     const card = document.createElement('div');
     card.className = 'scoreline-card';
+    // A stable id so the PNG exporter can find this exact card.
+    card.id = `scoreline-card-${s.id}`;
 
     const top = s.top_scorelines || [];
     const peak = top[0];
@@ -557,6 +613,7 @@ function createScorelineCard(s) {
     `;
 
     card.innerHTML = `
+        ${downloadButton('scoreline', s.id, `${s.home}-vs-${s.away}-md${s.match_day}-scoreline`)}
         <div class="sl-header">
             <div class="sl-teams">
                 ${teamBadge(s.home, s.home_logo)}

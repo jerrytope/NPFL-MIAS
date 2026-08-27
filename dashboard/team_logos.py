@@ -18,7 +18,6 @@ from django.templatetags.static import static
 
 LOGO_EXTENSIONS = ('.png', '.webp', '.jpg', '.jpeg', '.svg')
 
-_LOGO_INDEX_CACHE = None
 
 
 def _logo_dir():
@@ -33,12 +32,12 @@ def get_logo_index(force_refresh=False):
 
     Normalization is a lowercased, stripped basename, which is enough to match
     all 20 current clubs regardless of how each file happens to be capitalised.
-    Cached in-process for this worker, like ratings.get_all_career_stats().
-    """
-    global _LOGO_INDEX_CACHE
-    if _LOGO_INDEX_CACHE is not None and not force_refresh:
-        return _LOGO_INDEX_CACHE
 
+    Read from disk on every call. It used to be memoised in a module global,
+    which meant dropping a new crest into logos/ did nothing until the worker
+    restarted. A listdir of ~75 files is far too cheap to be worth that.
+    `force_refresh` is kept for the existing callers and is now a no-op.
+    """
     index = {}
     directory = _logo_dir()
     if directory and os.path.isdir(directory):
@@ -47,8 +46,7 @@ def get_logo_index(force_refresh=False):
             if ext.lower() in LOGO_EXTENSIONS:
                 index.setdefault(base.strip().lower(), filename)
 
-    _LOGO_INDEX_CACHE = index
-    return _LOGO_INDEX_CACHE
+    return index
 
 
 def get_logo_url(team_name):
