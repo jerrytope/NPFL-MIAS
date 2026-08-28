@@ -440,7 +440,8 @@
 
             <!-- Tab 1: Predicted Standings (Based on match predictions) -->
             <div class="tab-pane active" id="tabPredicted">
-                <!-- Match Day Filter -->
+                <!-- Match Day Filter (disabled) -->
+                {% comment %}
                 <form class="md-filter" method="get" action="/supercomputer/standings/">
                     <label for="mdSelect"><i class="fas fa-calendar-alt"></i> Show Standings After:</label>
                     <select id="mdSelect" name="match_day" onchange="this.form.submit()">
@@ -454,6 +455,7 @@
                     <a href="/supercomputer/standings/" style="font-size:12px; color:#0ea5e9; text-decoration:none; margin-left:auto;">Reset to Full Season</a>
                     {% endif %}
                 </form>
+                {% endcomment %}
 
                 <div class="zone-legend">
                     <span><span class="zone-dot champion"></span> Top 3 (Champions &amp; Continental CAF zone)</span>
