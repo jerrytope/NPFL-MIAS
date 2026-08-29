@@ -292,6 +292,14 @@ def standings(request):
         .order_by('-expected_points', '-avg_goal_diff')
     )
 
+    # Crests for both tables, looked up once for every club appearing in either.
+    logo_names = {row['team'] for row in standings_data} | {row.team.name for row in projections}
+    logos = get_logo_url_map(logo_names)
+    for row in standings_data:
+        row['logo'] = logos.get(row['team'].strip().lower())
+    for row in projections:
+        row.logo = logos.get(row.team.name.strip().lower())
+
     return render(request, 'supercomputer/standings.html', {
         'standings': standings_data,
         'projections': projections,
