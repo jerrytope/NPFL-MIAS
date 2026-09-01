@@ -18,7 +18,7 @@ the exact same underlying percentages.
 
 from collections import defaultdict
 
-from supercomputer.models import Prediction
+from supercomputer.models import Prediction, SeasonFixture
 
 
 SEASON = '26/27'
@@ -90,6 +90,84 @@ def calculate_standings(season=SEASON, max_match_day=None):
         })
 
     return standings
+
+
+def calculate_actual_table(season=SEASON):
+    """
+    The real league table, built only from results the admin has actually
+    entered — no predictions or projections involved.
+
+    Reads SeasonFixture rather than the Match table: it is scoped to the
+    season, carries match_day, has a real uniqueness constraint, and is
+    already the source simulator.py uses for played fixtures. A fixture counts
+    once both goals are set (SeasonFixture.is_played).
+
+    Every club in the season's fixture list gets a row, so all 20 appear with
+    zeros before their opening game instead of vanishing from the table.
+
+    Returns a list of dicts sorted by the official NPFL tie-break, each with:
+        position, team, played, won, drawn, lost, gf, ga, gd, points
+    """
+    fixtures = (
+        SeasonFixture.objects.filter(season=season)
+        .select_related('home', 'away')
+    )
+
+    def new_row(team_name):
+        return {
+            'team': team_name, 'played': 0, 'won': 0, 'drawn': 0, 'lost': 0,
+            'gf': 0, 'ga': 0, 'points': 0,
+        }
+
+    stats = {}
+    for f in fixtures:
+        for name in (f.home.name, f.away.name):
+            stats.setdefault(name, new_row(name))
+
+        if not f.is_played:
+            continue
+
+        home, away = stats[f.home.name], stats[f.away.name]
+        home_goal, away_goal = f.home_goal, f.away_goal
+
+        home['played'] += 1
+        away['played'] += 1
+        home['gf'] += home_goal
+        home['ga'] += away_goal
+        away['gf'] += away_goal
+        away['ga'] += home_goal
+
+        if home_goal > away_goal:
+            home['won'] += 1
+            home['points'] += 3
+            away['lost'] += 1
+        elif home_goal < away_goal:
+            away['won'] += 1
+            away['points'] += 3
+            home['lost'] += 1
+        else:
+            home['drawn'] += 1
+            away['drawn'] += 1
+            home['points'] += 1
+            away['points'] += 1
+
+    for row in stats.values():
+        row['gd'] = row['gf'] - row['ga']
+
+    # Official NPFL tie-break: Points -> Goal Difference -> Goals For. Kept
+    # identical to the simulated table's ordering in simulator.py so the real
+    # and projected tables can never rank the same records differently. Team
+    # name is a final tiebreak purely so equal records (every team, before a
+    # ball is kicked) come out in a stable order rather than an arbitrary one.
+    ordered = sorted(
+        stats.values(),
+        key=lambda r: (-r['points'], -r['gd'], -r['gf'], r['team']),
+    )
+
+    for position, row in enumerate(ordered, start=1):
+        row['position'] = position
+
+    return ordered
 
 
 def get_prediction_breakdown(season=SEASON):

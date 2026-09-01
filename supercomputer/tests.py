@@ -9,6 +9,7 @@ from supercomputer import ratings as ratings_module
 from supercomputer import simulator as simulator_module
 from supercomputer.models import (
     Prediction, SeasonFixture, TeamCareerStats, MatchDayVisibility, SeasonSummaryOverride,
+    TeamSeasonProjection,
 )
 from supercomputer.poisson_model import (
     expected_goals, goal_markets, most_likely_scoreline, score_probabilities, top_scorelines,
@@ -16,7 +17,7 @@ from supercomputer.poisson_model import (
 from supercomputer.predictor import predict_match
 from supercomputer.ratings import compute_team_ratings, get_team_rating, LEAGUE_AVERAGE_RATIO
 from supercomputer.simulator import run_monte_carlo_simulations
-from supercomputer.standings import calculate_standings
+from supercomputer.standings import calculate_actual_table, calculate_standings
 from django.urls import reverse
 from django.contrib.auth.models import User
 from pathlib import Path
@@ -603,6 +604,143 @@ class PublicApiPayloadTests(TestCase):
         from admin_panel.views import _build_predictions_data
         rows = _build_predictions_data(Prediction.objects.all())
         self.assertTrue(rows[0]['manually_edited'])
+
+
+class ActualTableTests(TestCase):
+    """
+    The real league table, built only from results the admin has entered.
+    Distinct from calculate_standings, which is expectation-based.
+    """
+
+    def setUp(self):
+        self.a, self.b, self.c, self.d = (
+            Team.objects.create(name=n) for n in ('A FC', 'B FC', 'C FC', 'D FC')
+        )
+
+    def _fixture(self, match_day, home, away, home_goal=None, away_goal=None):
+        return SeasonFixture.objects.create(
+            season='26/27', match_day=match_day, home=home, away=away,
+            home_goal=home_goal, away_goal=away_goal,
+        )
+
+    def _by_team(self):
+        return {r['team']: r for r in calculate_actual_table('26/27')}
+
+    def test_win_draw_and_loss_award_the_right_points(self):
+        self._fixture(1, self.a, self.b, 2, 0)   # A wins, B loses
+        self._fixture(1, self.c, self.d, 1, 1)   # C and D draw
+
+        rows = self._by_team()
+        self.assertEqual((rows['A FC']['points'], rows['A FC']['won']), (3, 1))
+        self.assertEqual((rows['B FC']['points'], rows['B FC']['lost']), (0, 1))
+        self.assertEqual((rows['C FC']['points'], rows['C FC']['drawn']), (1, 1))
+        self.assertEqual((rows['D FC']['points'], rows['D FC']['drawn']), (1, 1))
+        # `played` counts for both sides of every fixture
+        for name in ('A FC', 'B FC', 'C FC', 'D FC'):
+            self.assertEqual(rows[name]['played'], 1)
+
+    def test_goals_for_against_and_difference(self):
+        self._fixture(1, self.a, self.b, 3, 1)
+
+        rows = self._by_team()
+        self.assertEqual((rows['A FC']['gf'], rows['A FC']['ga'], rows['A FC']['gd']), (3, 1, 2))
+        self.assertEqual((rows['B FC']['gf'], rows['B FC']['ga'], rows['B FC']['gd']), (1, 3, -2))
+
+    def test_equal_points_are_separated_by_goal_difference_then_goals_for(self):
+        # Three 3-point teams: C wins by 3 (best GD), A and B both by 2 but A
+        # scored more, so the order must be C, A, B.
+        self._fixture(1, self.a, self.d, 3, 1)   # A: +2, 3 GF
+        self._fixture(2, self.b, self.d, 2, 0)   # B: +2, 2 GF
+        self._fixture(3, self.c, self.d, 3, 0)   # C: +3, 3 GF
+
+        table = calculate_actual_table('26/27')
+        self.assertEqual([r['team'] for r in table[:3]], ['C FC', 'A FC', 'B FC'])
+        self.assertEqual([r['position'] for r in table[:3]], [1, 2, 3])
+
+    def test_a_team_with_no_played_fixture_still_appears_with_zeros(self):
+        self._fixture(1, self.a, self.b, 1, 0)
+        self._fixture(2, self.c, self.d)          # scheduled, not played
+
+        rows = self._by_team()
+        self.assertIn('C FC', rows)
+        self.assertEqual(rows['C FC']['played'], 0)
+        self.assertEqual(rows['C FC']['points'], 0)
+        self.assertEqual(rows['C FC']['gf'], 0)
+
+    def test_a_goalless_draw_counts_as_played_and_awards_a_point(self):
+        """0 is falsy — the table must key off is_played, not truthy goals."""
+        self._fixture(1, self.a, self.b, 0, 0)
+
+        rows = self._by_team()
+        for name in ('A FC', 'B FC'):
+            self.assertEqual(rows[name]['played'], 1)
+            self.assertEqual(rows[name]['points'], 1)
+            self.assertEqual(rows[name]['drawn'], 1)
+
+    def test_results_accumulate_across_match_days(self):
+        self._fixture(1, self.a, self.b, 2, 0)   # A win
+        self._fixture(2, self.c, self.a, 1, 1)   # A draw
+        self._fixture(3, self.a, self.d, 0, 1)   # A loss
+
+        a = self._by_team()['A FC']
+        self.assertEqual(a['played'], 3)
+        self.assertEqual((a['won'], a['drawn'], a['lost']), (1, 1, 1))
+        self.assertEqual(a['points'], 4)
+        self.assertEqual((a['gf'], a['ga'], a['gd']), (3, 2, 1))
+
+    def test_unentered_fixtures_are_ignored_entirely(self):
+        self._fixture(1, self.a, self.b, 2, 0)
+        self._fixture(2, self.a, self.c)          # no result yet
+        self._fixture(3, self.a, self.d, None, 1)  # half-entered, not a result
+
+        a = self._by_team()['A FC']
+        self.assertEqual(a['played'], 1)
+        self.assertEqual(a['points'], 3)
+
+
+class MonteCarloActualPointsColumnTests(TestCase):
+    """
+    The Monte Carlo table shows each club's real points (APTS) beside its
+    projection. It is display-only and must never reorder that table.
+    """
+
+    def setUp(self):
+        self.strong, self.weak = (
+            Team.objects.create(name=n) for n in ('Strong FC', 'Weak FC')
+        )
+        # Weak FC actually won the only game played, but Strong FC is the one
+        # the simulation rates highest — so real points and xPts disagree.
+        SeasonFixture.objects.create(
+            season='26/27', match_day=1, home=self.weak, away=self.strong,
+            home_goal=3, away_goal=0,
+        )
+        TeamSeasonProjection.objects.create(
+            season='26/27', team=self.strong, expected_points=70.0, avg_goal_diff=20.0,
+        )
+        TeamSeasonProjection.objects.create(
+            season='26/27', team=self.weak, expected_points=40.0, avg_goal_diff=-10.0,
+        )
+
+    def test_actual_points_are_attached_to_each_projection(self):
+        rows = self.client.get('/supercomputer/standings/').context['projections']
+        by_team = {r.team.name: r.actual_points for r in rows}
+        self.assertEqual(by_team['Weak FC'], 3)     # won its game
+        self.assertEqual(by_team['Strong FC'], 0)   # lost its game
+
+    def test_the_column_does_not_reorder_the_monte_carlo_table(self):
+        rows = self.client.get('/supercomputer/standings/').context['projections']
+        # Ordered by expected_points, NOT by the real points — Weak FC has more
+        # actual points but must still rank below Strong FC.
+        self.assertEqual([r.team.name for r in rows], ['Strong FC', 'Weak FC'])
+
+    def test_a_club_with_no_result_yet_shows_zero_not_an_error(self):
+        newcomer = Team.objects.create(name='Newcomer FC')
+        TeamSeasonProjection.objects.create(
+            season='26/27', team=newcomer, expected_points=55.0, avg_goal_diff=0.0,
+        )
+        rows = self.client.get('/supercomputer/standings/').context['projections']
+        by_team = {r.team.name: r.actual_points for r in rows}
+        self.assertEqual(by_team['Newcomer FC'], 0)
 
 
 class StandingsExpectedPointsTests(TestCase):

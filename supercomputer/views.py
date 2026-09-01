@@ -12,7 +12,7 @@ from supercomputer.models import (
 )
 from supercomputer.poisson_model import goal_markets, top_scorelines
 from supercomputer.predictor import predict_all_fixtures
-from supercomputer.standings import calculate_standings
+from supercomputer.standings import calculate_actual_table, calculate_standings
 
 
 def get_unlocked_match_days(season):
@@ -301,27 +301,47 @@ def standings(request):
         .order_by('match_day')
     )
 
-    # Tab 1: Predicted standings from individual match predictions
-    standings_data = calculate_standings(max_match_day=max_match_day)
-
-    # Tab 2: 1,000-run Monte Carlo Simulation projections
+    # Tab 1: Monte Carlo Simulation projections
     projections = list(
         TeamSeasonProjection.objects.filter(season='26/27')
         .select_related('team')
         .order_by('-expected_points', '-avg_goal_diff')
     )
 
-    # Crests for both tables, looked up once for every club appearing in either.
-    logo_names = {row['team'] for row in standings_data} | {row.team.name for row in projections}
+    # Tab 2: the real table, from results the admin has actually entered
+    actual_table = calculate_actual_table()
+
+    # Still computed although its tab is currently commented out in the
+    # template — keeping it here makes restoring that tab a template-only
+    # change. calculate_standings is also used by the admin panel.
+    standings_data = calculate_standings(max_match_day=max_match_day)
+
+    # Crests for every table, looked up once for every club appearing in any.
+    logo_names = (
+        {row['team'] for row in standings_data}
+        | {row.team.name for row in projections}
+        | {row['team'] for row in actual_table}
+    )
     logos = get_logo_url_map(logo_names)
     for row in standings_data:
         row['logo'] = logos.get(row['team'].strip().lower())
     for row in projections:
         row.logo = logos.get(row.team.name.strip().lower())
+    for row in actual_table:
+        row['logo'] = logos.get(row['team'].strip().lower())
+
+    # Real points banked so far, shown alongside each projection as APTS. This
+    # is display-only: the Monte Carlo table keeps its own xPts ordering, so
+    # adding the column cannot reorder it.
+    actual_points = {row['team']: row['points'] for row in actual_table}
+    for row in projections:
+        row.actual_points = actual_points.get(row.team.name, 0)
 
     return render(request, 'supercomputer/standings.html', {
         'standings': standings_data,
         'projections': projections,
+        'actual_table': actual_table,
+        'any_results_entered': any(row['played'] for row in actual_table),
         'all_match_days': all_match_days,
         'selected_md': max_match_day,
     })

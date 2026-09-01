@@ -187,7 +187,8 @@ function populateFilterOptions() {
     });
 
     const currentMD = els.matchDaySelect.value;
-    if (els.matchDaySelect.options.length <= 1) {
+    const optionsWereEmpty = els.matchDaySelect.options.length <= 1;
+    if (optionsWereEmpty) {
         // Iterate the published list rather than counting 1..N: the admin can
         // unlock match days in any order, so the unlocked set may have gaps.
         unlockedMatchDays.forEach(md => {
@@ -196,6 +197,15 @@ function populateFilterOptions() {
             opt.textContent = `Match Day ${md}`;
             els.matchDaySelect.appendChild(opt);
         });
+
+        // Open on the newest published match day rather than the whole season —
+        // that is the round people come here to look at. "All Match Days" and
+        // every earlier round are still one click away in this same dropdown.
+        // Only done while building the options, so it never fights a choice
+        // the visitor has already made.
+        if (!currentMD && unlockedMatchDays.length > 0) {
+            els.matchDaySelect.value = String(Math.max(...unlockedMatchDays));
+        }
     }
 
     if (els.teamSelect.options.length <= 1) {

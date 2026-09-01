@@ -512,6 +512,24 @@ body {
     color: var(--text-secondary);
 }
 
+/* Heading + admin download button on one line. The button has to sit in normal
+   flow here: .card sets overflow:hidden, so the absolutely-positioned
+   .chart-card > .download-btn variant would be clipped by the profile card. */
+.recent-table-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.recent-table-head h4 {
+    margin-bottom: 0;
+}
+
+.recent-table-head + .table-compact {
+    margin-top: 0.75rem;
+}
+
 /* Compact Table inside Profiles */
 .table-compact {
     width: 100%;
@@ -1281,6 +1299,19 @@ body {
     border: 1px solid var(--border-color);
     background: var(--bg-card);
     margin-bottom: 1.5rem;
+}
+
+/* Applied to the live element only while a PNG is being captured — see
+   data-export-class in index.html and setExportLayout() in png_export.js.
+   On screen the four KPI cards are one wide row, which exports as a thin
+   strip; 2x2 inside a narrower block gives a roughly 3:2 shareable image.
+   Not a media query: browsing the page at any width is unaffected. */
+.summary-capture.export-narrow {
+    max-width: 860px;
+}
+
+.summary-capture.export-narrow .kpi-row {
+    grid-template-columns: 1fr 1fr;
 }
 
 .summary-capture-head {

@@ -85,7 +85,7 @@
         
         <!-- Match Summary: KPIs + recent form, wrapped so the admin download
              captures the whole block as one social-media image. -->
-        <section class="summary-capture" id="matchSummaryCapture">
+        <section class="summary-capture" id="matchSummaryCapture" data-export-class="export-narrow">
             <div class="summary-capture-head">
                 <h3 class="summary-capture-title">Head-to-Head Summary</h3>
                 {% if user.is_authenticated %}
@@ -159,7 +159,7 @@
         <!-- Team Profile & Form Summary -->
         <div class="profiles-container">
             <!-- Team 1 Card -->
-            <div class="card profile-card team-1-border">
+            <div class="card profile-card team-1-border" id="t1ProfileCard">
                 <div class="profile-header">
                     <div class="team-avatar-wrapper" id="t1Avatar">
                         <!-- Filled by JS -->
@@ -175,7 +175,17 @@
                     </div>
                 </div>
                 <div class="recent-table-wrapper">
-                    <h4>Recent NPFL Matches</h4>
+                    <div class="recent-table-head">
+                        <h4>Recent NPFL Matches</h4>
+                        {% if user.is_authenticated %}
+                        <!-- Captures the whole profile card, so the image carries the
+                             club's crest, name and form rather than a nameless table. -->
+                        <button class="download-btn download-btn-inline" title="Download PNG"
+                                onclick="downloadElementAsPNG('t1ProfileCard', 'recent-matches', document.getElementById('t1Name').innerText)">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                        {% endif %}
+                    </div>
                     <table class="table-compact">
                         <thead>
                             <tr>
@@ -193,7 +203,7 @@
             </div>
 
             <!-- Team 2 Card -->
-            <div class="card profile-card team-2-border">
+            <div class="card profile-card team-2-border" id="t2ProfileCard">
                 <div class="profile-header">
                     <div class="team-avatar-wrapper" id="t2Avatar">
                         <!-- Filled by JS -->
@@ -209,7 +219,15 @@
                     </div>
                 </div>
                 <div class="recent-table-wrapper">
-                    <h4>Recent NPFL Matches</h4>
+                    <div class="recent-table-head">
+                        <h4>Recent NPFL Matches</h4>
+                        {% if user.is_authenticated %}
+                        <button class="download-btn download-btn-inline" title="Download PNG"
+                                onclick="downloadElementAsPNG('t2ProfileCard', 'recent-matches', document.getElementById('t2Name').innerText)">
+                            <i class="fa-solid fa-download"></i>
+                        </button>
+                        {% endif %}
+                    </div>
                     <table class="table-compact">
                         <thead>
                             <tr>

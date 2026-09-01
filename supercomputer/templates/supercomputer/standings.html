@@ -1,6 +1,7 @@
 {% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<!-- data-theme is set here so the pre-JS paint is light; theme.js overrides it for anyone who chose dark. -->
+<html lang="en" data-theme="light">
 
 <head>
     <meta charset="UTF-8">
@@ -470,16 +471,34 @@
         <!-- Tabs Navigation -->
         <div class="tabs-section">
             <div class="tabs-header">
-                <button class="tab-btn active" onclick="switchTab('tabPredicted', this)">
-                    <i class="fas fa-list-ol"></i> Predicted Standings (Expected Points)
-                </button>
-                <button class="tab-btn" onclick="switchTab('tabSimulation', this)">
+                <button class="tab-btn active" onclick="switchTab('tabSimulation', this)">
                     <i class="fas fa-dice"></i> 100,000 Monte Carlo Simulations (Probabilistic)
                 </button>
+                <button class="tab-btn" onclick="switchTab('tabActual', this)">
+                    <i class="fas fa-table-list"></i> League Table (Actual Results)
+                </button>
+                {% comment %}
+                Predicted Standings tab is hidden. To restore it, uncomment this
+                button and the #tabPredicted pane further down. The view still
+                supplies `standings`, so nothing else needs changing.
+                <button class="tab-btn" onclick="switchTab('tabPredicted', this)">
+                    <i class="fas fa-list-ol"></i> Predicted Standings (Expected Points)
+                </button>
+                {% endcomment %}
             </div>
 
+            <!--
+            Predicted Standings pane is hidden — see the matching note on the
+            tab buttons above. It is switched off with an "if False" block
+            rather than a Django comment block, because the pane already
+            contains a comment block of its own for the disabled match-day
+            filter, and Django's comment tags do not nest: the inner closing
+            tag would end the outer block early and dump raw markup onto the
+            page. (This note is a plain HTML comment for the same reason.)
+            -->
+            {% if False %}
             <!-- Tab 1: Predicted Standings (Based on match predictions) -->
-            <div class="tab-pane active" id="tabPredicted">
+            <div class="tab-pane" id="tabPredicted">
                 <!-- Match Day Filter (disabled) -->
                 {% comment %}
                 <form class="md-filter" method="get" action="/supercomputer/standings/">
@@ -561,9 +580,10 @@
                 </div>
                 {% endif %}
             </div>
+            {% endif %}{# end hidden Predicted Standings pane #}
 
-            <!-- Tab 2: 100,000 Monte Carlo Simulation Standings -->
-            <div class="tab-pane" id="tabSimulation">
+            <!-- Tab 1: 100,000 Monte Carlo Simulation Standings -->
+            <div class="tab-pane active" id="tabSimulation">
                 <!-- Info bar — simulations are run from the terminal only (manage.py run_simulation) -->
                 <div class="sim-action-bar">
                     <div class="sim-info">
@@ -593,6 +613,7 @@
                             <tr>
                                 <th>#</th>
                                 <th>Team</th>
+                                <th title="Actual points earned so far, from results already entered">APTS</th>
                                 <th>xPts</th>
                                 <th>Projected Range</th>
                                 <th>Title %</th>
@@ -619,6 +640,7 @@
                                         <strong>{{ row.team.name }}</strong>
                                     </span>
                                 </td>
+                                <td style="font-weight:700;">{{ row.actual_points }}</td>
                                 <td class="pts-cell">{{ row.expected_points|floatformat:1 }}</td>
                                 <td><span class="range-badge">{{ row.worst_points }} – {{ row.best_points }} pts</span></td>
                                 <td>
@@ -655,6 +677,86 @@
                     <i class="fas fa-dice" style="font-size:32px; color:#9ca3af; margin-bottom:12px;"></i>
                     <h3>No simulation data available yet</h3>
                     <p style="color:#6b7280; margin-top:8px;">Run <code>python manage.py run_simulation</code> in the terminal to generate the full probabilistic table.</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Tab 2: Real league table, from results the admin has entered -->
+            <div class="tab-pane" id="tabActual">
+                <div class="sim-action-bar">
+                    <div class="sim-info">
+                        <h3><i class="fas fa-futbol" style="color:#0ea5e9;"></i> Actual League Table</h3>
+                        <p>The real table as it stands, built only from match results entered so far — no predictions or projections. It updates as soon as a result is recorded.</p>
+                    </div>
+                </div>
+
+                <div class="zone-legend">
+                    <span><span class="zone-dot champion"></span> Top 3 (Champions &amp; Continental CAF zone)</span>
+                    <span><span class="zone-dot relegation"></span> Bottom 4 (Relegation zone — Positions 17 to 20)</span>
+                </div>
+
+                {% if any_results_entered %}
+                {% if user.is_authenticated %}
+                <div class="table-download-bar">
+                    <button type="button" class="download-btn" title="Download PNG"
+                            aria-label="Download the actual league table as an image"
+                            onclick="downloadElementAsPNG('actualStandingsTable', 'league-table')">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
+                {% endif %}
+                <div class="standings-card">
+                    <table class="standings-table" id="actualStandingsTable">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Team</th>
+                                <th>P</th>
+                                <th>W</th>
+                                <th>D</th>
+                                <th>L</th>
+                                <th>GF</th>
+                                <th>GA</th>
+                                <th>GD</th>
+                                <th>Pts</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in actual_table %}
+                            <tr>
+                                <td class="pos-cell {% if row.position <= 3 %}pos-top3{% elif row.position > 16 %}pos-relegation{% endif %}">
+                                    {{ row.position }}
+                                </td>
+                                <td>
+                                    <span class="team-cell">
+                                        {% if row.logo %}
+                                        <img class="team-logo-sm" src="{{ row.logo }}" alt="" loading="lazy"
+                                             onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-flex';">
+                                        <span class="team-initials-sm" style="background:#64748b; display:none;">{{ row.team|slice:":2"|upper }}</span>
+                                        {% else %}
+                                        <span class="team-initials-sm" style="background:#64748b;">{{ row.team|slice:":2"|upper }}</span>
+                                        {% endif %}
+                                        <strong>{{ row.team }}</strong>
+                                    </span>
+                                </td>
+                                <td>{{ row.played }}</td>
+                                <td>{{ row.won }}</td>
+                                <td>{{ row.drawn }}</td>
+                                <td>{{ row.lost }}</td>
+                                <td>{{ row.gf }}</td>
+                                <td>{{ row.ga }}</td>
+                                <td>{% if row.gd > 0 %}+{{ row.gd }}{% else %}{{ row.gd }}{% endif %}</td>
+                                <td class="pts-cell">{{ row.points }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="empty-state" style="margin-top:40px; text-align:center; padding:40px;">
+                    <i class="fas fa-futbol" style="font-size:32px; color:#9ca3af; margin-bottom:12px;"></i>
+                    <h3>No results entered yet</h3>
+                    <p style="color:#6b7280; margin-top:8px;">The table will fill in as match results are recorded in the admin panel.</p>
                 </div>
                 {% endif %}
             </div>

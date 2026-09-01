@@ -112,6 +112,23 @@
             }
         }
 
+        /* An element can ask to be laid out differently just for the capture by
+           setting data-export-class (e.g. the head-to-head summary switches its
+           four KPI cards from one wide row to a 2x2 block, so the PNG is a
+           usable shape rather than a thin strip).
+
+           This has to be applied to the LIVE element, not to the clone:
+           html2canvas sizes its canvas from the original element's bounding
+           box, so a clone that ended up taller would simply be cropped. The
+           cost is a brief layout shift on screen while the capture runs. */
+        var exportClass = element.dataset ? element.dataset.exportClass : '';
+        function setExportLayout(on) {
+            if (!exportClass) return;
+            element.classList[on ? 'add' : 'remove'](exportClass);
+        }
+
+        setExportLayout(true);
+
         decodeImages(element).then(function () {
             return html2canvas(element, {
                 backgroundColor: '#ffffff',
@@ -121,6 +138,7 @@
                 onclone: function (clonedDoc) { prepareClone(clonedDoc); }
             });
         }).then(function (canvas) {
+            setExportLayout(false);
             var link = document.createElement('a');
             link.download = prefix + filenamePrefix + '.png';
             link.href = canvas.toDataURL('image/png');
@@ -128,6 +146,9 @@
             link.click();
             link.remove();
         }).catch(function (err) {
+            /* Must also run here, or a failed export leaves the page stuck in
+               the export layout. */
+            setExportLayout(false);
             console.error('Failed to generate download image:', err);
             alert('Could not generate the download image. Please try again.');
         });

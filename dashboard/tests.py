@@ -258,3 +258,49 @@ class MatchSummaryBlockTests(TestCase):
         html = self.client.get(reverse('dashboard:index')).content.decode()
         self.assertNotIn('Cache Synced', html)
         self.assertIn('Live Data', html)
+
+    def test_the_summary_block_opts_into_the_narrow_export_layout(self):
+        """
+        The four KPI cards are one wide row on screen, which exports as a thin
+        strip. png_export.js applies this class to the live element for the
+        duration of the capture so the PNG comes out roughly 3:2.
+        """
+        html = self.client.get(reverse('dashboard:index')).content.decode()
+        self.assertIn('data-export-class="export-narrow"', html)
+
+
+class RecentMatchesDownloadTests(TestCase):
+    """Each team's profile card is downloadable as its own image."""
+
+    def _html(self):
+        return self.client.get(reverse('dashboard:index')).content.decode()
+
+    def _sign_in(self):
+        from django.contrib.auth.models import User
+        User.objects.create_user(username='owner', password='OwnerPass!2026')
+        self.client.login(username='owner', password='OwnerPass!2026')
+
+    def test_each_profile_card_is_targetable(self):
+        """The capture targets the whole card, so the image carries the club's
+        crest, name and form — not just a nameless table."""
+        html = self._html()
+        self.assertIn('id="t1ProfileCard"', html)
+        self.assertIn('id="t2ProfileCard"', html)
+
+    def test_both_download_buttons_are_hidden_from_the_public(self):
+        html = self._html()
+        self.assertNotIn('recent-matches', html)
+
+    def test_both_download_buttons_appear_for_a_signed_in_admin(self):
+        self._sign_in()
+        html = self._html()
+        self.assertIn("downloadElementAsPNG('t1ProfileCard', 'recent-matches'", html)
+        self.assertIn("downloadElementAsPNG('t2ProfileCard', 'recent-matches'", html)
+
+    def test_the_filename_is_named_after_the_team_being_downloaded(self):
+        """Without a hint the exporter prefixes 'team1-vs-team2-', which reads
+        wrong on a single-club image."""
+        self._sign_in()
+        html = self._html()
+        self.assertIn("document.getElementById('t1Name').innerText", html)
+        self.assertIn("document.getElementById('t2Name').innerText", html)
