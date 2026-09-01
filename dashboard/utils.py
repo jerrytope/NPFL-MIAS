@@ -226,13 +226,22 @@ def determine_match_result(row, team):
             return 'D'
     return None
 
+def team_recent_matches(df, team, n=5):
+    """
+    A team's last n completed matches, chronologically ordered (df is expected
+    to already be in id/insertion order, per get_npfl_data). Naturally crosses
+    season boundaries: a team with only 1 game in a new season and n-1 or more
+    from the previous season still gets a full n-game window.
+    """
+    team_games = df[(df['home'] == team) | (df['away'] == team)].copy()
+    return team_games.dropna(subset=['home_goal', 'away_goal']).tail(n)
+
 def get_team_form(df, team, n=5):
     """
     Retrieve the last n completed matches for a team and compute their form string (e.g. WWDLD).
     """
-    team_games = df[(df['home'] == team) | (df['away'] == team)].copy()
-    completed = team_games.dropna(subset=['home_goal', 'away_goal']).tail(n)
-    
+    completed = team_recent_matches(df, team, n)
+
     results = []
     games_list = []
     for idx, row in completed.iterrows():

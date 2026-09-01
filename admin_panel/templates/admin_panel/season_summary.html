@@ -1,0 +1,142 @@
+{% extends 'admin_panel/base.html' %}
+
+{% block nav_season_summary %}active{% endblock %}
+{% block page_title %}Season Summary{% endblock %}
+
+{% block content %}
+<div class="data-table-wrapper" style="margin-bottom:24px; padding:20px;">
+    <p style="font-size:13px; line-height:1.6; margin:0;">
+        <i class="fas fa-circle-info" style="margin-right:6px;"></i>
+        The "Season Games / Home Wins / Draws / Away Wins" banner on the public Super Computer
+        page normally sums live prediction percentages, so it moves every time predictions are
+        regenerated. Turn the override <strong>on</strong> to freeze it at fixed numbers instead;
+        turn it <strong>off</strong> to go back to the live-computed totals.
+    </p>
+</div>
+
+<div class="section-header">
+    <h3>{{ season }} Season Summary</h3>
+</div>
+
+<div class="data-table-wrapper" style="padding:24px;">
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:24px;">
+        <label class="switch">
+            <input type="checkbox" id="isActiveToggle" {% if override.is_active %}checked{% endif %}>
+            <span class="slider"></span>
+        </label>
+        <span id="activeLabel" style="font-weight:600;">
+            {% if override.is_active %}Override active — showing frozen numbers{% else %}Override off — showing live-computed numbers{% endif %}
+        </span>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon blue"><i class="fas fa-gamepad"></i></div>
+            <div>
+                <label for="fieldGames" style="display:block; font-size:12px; color:var(--text-muted, #888);">Season Games</label>
+                <input type="number" id="fieldGames" min="0" value="{{ override.games }}"
+                       style="width:100px; font-size:20px; font-weight:700; border:1px solid #ccc; border-radius:6px; padding:4px 8px;">
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon green"><i class="fas fa-house"></i></div>
+            <div>
+                <label for="fieldHomeWins" style="display:block; font-size:12px; color:var(--text-muted, #888);">Home Wins</label>
+                <input type="number" id="fieldHomeWins" min="0" value="{{ override.home_wins }}"
+                       style="width:100px; font-size:20px; font-weight:700; border:1px solid #ccc; border-radius:6px; padding:4px 8px;">
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon amber"><i class="fas fa-handshake"></i></div>
+            <div>
+                <label for="fieldDraws" style="display:block; font-size:12px; color:var(--text-muted, #888);">Draws</label>
+                <input type="number" id="fieldDraws" min="0" value="{{ override.draws }}"
+                       style="width:100px; font-size:20px; font-weight:700; border:1px solid #ccc; border-radius:6px; padding:4px 8px;">
+            </div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon"><i class="fas fa-plane"></i></div>
+            <div>
+                <label for="fieldAwayWins" style="display:block; font-size:12px; color:var(--text-muted, #888);">Away Wins</label>
+                <input type="number" id="fieldAwayWins" min="0" value="{{ override.away_wins }}"
+                       style="width:100px; font-size:20px; font-weight:700; border:1px solid #ccc; border-radius:6px; padding:4px 8px;">
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top:24px;">
+        <button class="btn btn-primary" id="saveBtn" onclick="saveSummary()">
+            <i class="fas fa-floppy-disk"></i> Save
+        </button>
+    </div>
+</div>
+
+<!-- Save Toast -->
+<div id="saveToast" style="display:none; position:fixed; bottom:24px; right:24px; background:#10b981; color:#fff; padding:12px 20px; border-radius:8px; font-weight:600; font-size:13px; box-shadow:0 4px 12px rgba(0,0,0,0.15); z-index:9999;">
+    <i class="fas fa-check"></i> <span id="toastMsg">Saved</span>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<style>
+.switch { position: relative; display: inline-block; width: 46px; height: 24px; }
+.switch input { opacity: 0; width: 0; height: 0; }
+.switch .slider { position: absolute; cursor: pointer; inset: 0; background-color: #ccc; transition: .2s; border-radius: 24px; }
+.switch .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: #fff; transition: .2s; border-radius: 50%; }
+.switch input:checked + .slider { background-color: #10b981; }
+.switch input:checked + .slider:before { transform: translateX(22px); }
+</style>
+<script>
+function getCookie(name) {
+    const value = '; ' + document.cookie;
+    const parts = value.split('; ' + name + '=');
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return '';
+}
+
+const csrfToken = getCookie('csrftoken');
+
+function showToast(msg) {
+    const toast = document.getElementById('saveToast');
+    document.getElementById('toastMsg').textContent = msg || 'Saved';
+    toast.style.display = 'block';
+    setTimeout(() => { toast.style.display = 'none'; }, 3000);
+}
+
+document.getElementById('isActiveToggle').addEventListener('change', function() {
+    document.getElementById('activeLabel').textContent = this.checked
+        ? 'Override active — showing frozen numbers'
+        : 'Override off — showing live-computed numbers';
+});
+
+async function saveSummary() {
+    const btn = document.getElementById('saveBtn');
+    btn.disabled = true;
+
+    const payload = {
+        is_active: document.getElementById('isActiveToggle').checked,
+        games: document.getElementById('fieldGames').value,
+        home_wins: document.getElementById('fieldHomeWins').value,
+        draws: document.getElementById('fieldDraws').value,
+        away_wins: document.getElementById('fieldAwayWins').value,
+    };
+
+    try {
+        const res = await fetch('/admin/api/season-summary/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrfToken },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Request failed');
+
+        showToast('Season summary saved');
+    } catch (err) {
+        console.error(err);
+        showToast('Could not save: ' + err.message);
+    } finally {
+        btn.disabled = false;
+    }
+}
+</script>
+{% endblock %}

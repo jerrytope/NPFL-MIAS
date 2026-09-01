@@ -14,7 +14,7 @@ from dashboard.models import Team, TeamComparisonReport, Match
 from dashboard.utils import get_npfl_data, perform_comparison, generate_expert_report, get_team_home_away_splits, get_all_seasons
 from dashboard.views import NPFL_CLUBS_2026_2027, canonical_team_pair
 from supercomputer.models import (
-    SeasonFixture, Prediction, MatchAnalysisReport, MatchDayVisibility,
+    SeasonFixture, Prediction, MatchAnalysisReport, MatchDayVisibility, SeasonSummaryOverride,
 )
 from supercomputer.predictor import predict_all_fixtures
 from supercomputer.standings import calculate_standings, get_prediction_breakdown
@@ -428,6 +428,69 @@ def match_day_visibility_bulk(request):
         'action': action,
         'affected': len(match_days),
         'unlocked_count': len(match_days) if unlock else 0,
+    })
+
+
+@login_required
+def season_summary(request):
+    """
+    Edit the frozen "Season Games / Home Wins / Draws / Away Wins" numbers
+    shown on the public /supercomputer/ page's stats banner.
+
+    When the override is active, the public page shows these fixed numbers
+    instead of the live-computed sum of Prediction percentages (which drifts
+    every time predictions are regenerated) — see
+    supercomputer/views.py::_season_totals.
+    """
+    override, _ = SeasonSummaryOverride.objects.get_or_create(season=SEASON)
+
+    return render(request, 'admin_panel/season_summary.html', {
+        'season': SEASON,
+        'override': override,
+    })
+
+
+@require_POST
+@login_required
+def season_summary_update(request):
+    """API: save the frozen season-summary numbers and/or toggle the override on/off."""
+    try:
+        body = json.loads(request.body) if request.body else request.POST
+    except json.JSONDecodeError:
+        return JsonResponse({'error': 'Invalid JSON'}, status=400)
+
+    is_active = body.get('is_active')
+    if isinstance(is_active, str):
+        is_active = is_active.lower() in ('true', '1', 'yes')
+
+    try:
+        games = int(body.get('games'))
+        home_wins = int(body.get('home_wins'))
+        draws = int(body.get('draws'))
+        away_wins = int(body.get('away_wins'))
+    except (TypeError, ValueError):
+        return JsonResponse({'error': 'games, home_wins, draws and away_wins must be integers'}, status=400)
+
+    if min(games, home_wins, draws, away_wins) < 0:
+        return JsonResponse({'error': 'Values cannot be negative'}, status=400)
+
+    override, _ = SeasonSummaryOverride.objects.update_or_create(
+        season=SEASON,
+        defaults={
+            'is_active': bool(is_active),
+            'games': games,
+            'home_wins': home_wins,
+            'draws': draws,
+            'away_wins': away_wins,
+        },
+    )
+
+    return JsonResponse({
+        'is_active': override.is_active,
+        'games': override.games,
+        'home_wins': override.home_wins,
+        'draws': override.draws,
+        'away_wins': override.away_wins,
     })
 
 

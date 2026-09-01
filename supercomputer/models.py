@@ -87,6 +87,30 @@ class MatchDayVisibility(models.Model):
         return f"MD{self.match_day} ({self.season}) — {state}"
 
 
+class SeasonSummaryOverride(models.Model):
+    """
+    Manually-frozen values for the "Season Games / Home Wins / Draws / Away
+    Wins" card on the public /supercomputer/ page.
+
+    That card normally sums live Prediction percentages (see
+    supercomputer/views.py::_season_totals), so it drifts every time
+    predictions are regenerated. When is_active is True, the card shows these
+    frozen numbers instead; when False, it falls back to the live-computed
+    totals.
+    """
+    season = models.CharField(max_length=32, unique=True)
+    is_active = models.BooleanField(default=False)
+    games = models.PositiveIntegerField(default=0)
+    home_wins = models.PositiveIntegerField(default=0)
+    draws = models.PositiveIntegerField(default=0)
+    away_wins = models.PositiveIntegerField(default=0)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        state = 'override active' if self.is_active else 'live'
+        return f"Season summary ({self.season}) — {state}"
+
+
 class MatchAnalysisReport(models.Model):
     """Per-fixture match analysis report — written by admin or AI-generated."""
     fixture = models.OneToOneField(

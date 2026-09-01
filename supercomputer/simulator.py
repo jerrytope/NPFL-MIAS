@@ -21,8 +21,10 @@ from django.db import transaction
 from dashboard.utils import get_npfl_data
 from dashboard.models import Team
 from supercomputer.models import SeasonFixture, TeamSeasonProjection
-from supercomputer.ratings import compute_team_ratings
-from supercomputer.poisson_model import expected_goals
+from supercomputer.ratings import blend_ratings, compute_rating_components
+from supercomputer.poisson_model import (
+    expected_goals, MIN_LAMBDA_HOME, MAX_LAMBDA_HOME, MIN_LAMBDA_AWAY, MAX_LAMBDA_AWAY,
+)
 from supercomputer.predictor import get_team_transfer_rating
 
 
@@ -32,6 +34,50 @@ def calculate_match_expected_goals(home_team, away_team, ratings, league_avg_hom
         home_team, away_team, ratings, league_avg_home_goals, league_avg_away_goals,
         get_team_transfer_rating(home_team), get_team_transfer_rating(away_team),
     )
+
+
+def _apply_result(table, momentum, h, a, gh, ga):
+    """
+    Mutate `table`/`momentum` in place for one fixture's (gh, ga) result.
+    Shared by the deterministic pre-pass over already-played fixtures and the
+    per-iteration random draws over unplayed ones, so both use identical
+    scoring/momentum rules.
+    """
+    table[h]['gf'] += gh
+    table[h]['ga'] += ga
+    table[a]['gf'] += ga
+    table[a]['ga'] += gh
+
+    if gh > ga:
+        # Home Win
+        table[h]['points'] += 3
+        table[h]['won'] += 1
+        table[a]['lost'] += 1
+
+        # Momentum: Home win bonus, away loss penalty
+        momentum[h] = min(1.25, momentum[h] + 0.05)
+        momentum[a] = max(0.80, momentum[a] - 0.04)
+
+    elif gh < ga:
+        # Away Win — Crucial 1.3x momentum booster
+        table[a]['points'] += 3
+        table[a]['won'] += 1
+        table[h]['lost'] += 1
+
+        # Momentum: 1.3x booster for away victory!
+        momentum[a] = min(1.35, momentum[a] * 1.30)
+        momentum[h] = max(0.78, momentum[h] - 0.06)
+
+    else:
+        # Draw
+        table[h]['points'] += 1
+        table[a]['points'] += 1
+        table[h]['drawn'] += 1
+        table[a]['drawn'] += 1
+
+        # Momentum decays toward 1.0
+        momentum[h] = 1.0 + (momentum[h] - 1.0) * 0.5
+        momentum[a] = 1.0 + (momentum[a] - 1.0) * 0.5
 
 
 def run_monte_carlo_simulations(season='26/27', iterations=1000, df=None):
@@ -59,15 +105,44 @@ def run_monte_carlo_simulations(season='26/27', iterations=1000, df=None):
     )))
     total_teams = len(team_names)
 
-    # Fit team ratings once (not per-fixture) and reuse across all fixtures
-    ratings, league_avg_home_goals, league_avg_away_goals = compute_team_ratings(df)
+    # Fit the expensive long-run model once, then re-blend recent form per
+    # horizon below — cheap, and it keeps a hot streak from being projected at
+    # full strength onto fixtures eight months away.
+    long_run_ratings, form_signals, league_avg_home_goals, league_avg_away_goals = (
+        compute_rating_components(df)
+    )
+
+    # Already-played fixtures have a real, known score — lock those in instead
+    # of re-simulating them every iteration. Only fixtures still to be played
+    # need a predicted lambda and a random draw per simulation.
+    played_fixtures = [f for f in fixtures if f.is_played]
+    unplayed_fixtures = [f for f in fixtures if not f.is_played]
+
+    reference_match_day = max(
+        (f.match_day for f in played_fixtures), default=0
+    )
 
     fixture_lambdas = {}
-    for f in fixtures:
-        h_name = f.home.name
-        a_name = f.away.name
-        lh, la = calculate_match_expected_goals(h_name, a_name, ratings, league_avg_home_goals, league_avg_away_goals)
+    ratings_by_horizon = {}
+    for f in unplayed_fixtures:
+        horizon = max(0, f.match_day - reference_match_day)
+        if horizon not in ratings_by_horizon:
+            ratings_by_horizon[horizon] = blend_ratings(long_run_ratings, form_signals, horizon)
+
+        lh, la = calculate_match_expected_goals(
+            f.home.name, f.away.name, ratings_by_horizon[horizon],
+            league_avg_home_goals, league_avg_away_goals,
+        )
         fixture_lambdas[f.id] = (lh, la)
+
+    # Deterministic base state from real results, computed once (not per
+    # iteration): banked points/gf/ga plus the real momentum those results
+    # produced, so the simulated remainder of the season starts from what's
+    # actually known rather than from a fictional neutral restart.
+    base_table = {t: {'points': 0, 'gf': 0, 'ga': 0, 'gd': 0, 'won': 0, 'drawn': 0, 'lost': 0} for t in team_names}
+    base_momentum = {t: 1.0 for t in team_names}
+    for f in played_fixtures:
+        _apply_result(base_table, base_momentum, f.home.name, f.away.name, f.home_goal, f.away_goal)
 
     # Accumulators across all simulations
     team_sim_points = defaultdict(list)
@@ -80,59 +155,29 @@ def run_monte_carlo_simulations(season='26/27', iterations=1000, df=None):
 
     # Run 1,000 independent season simulations
     for sim_idx in range(iterations):
-        # In-season state for this run
-        table = {t: {'points': 0, 'gf': 0, 'ga': 0, 'gd': 0, 'won': 0, 'drawn': 0, 'lost': 0} for t in team_names}
-        momentum = {t: 1.0 for t in team_names}
+        # In-season state for this run, seeded from the real, already-played
+        # results — only the unplayed fixtures below are actually random.
+        table = {t: dict(v) for t, v in base_table.items()}
+        momentum = dict(base_momentum)
 
-        for f in fixtures:
+        for f in unplayed_fixtures:
             fid = f.id
             h = f.home.name
             a = f.away.name
 
             base_lh, base_la = fixture_lambdas[fid]
-            sim_lh = max(0.1, base_lh * momentum[h])
-            sim_la = max(0.1, base_la * momentum[a])
+            # Momentum must respect the same "realistic bounds" expected_goals()
+            # already clips to — otherwise a fixture already near the cap can
+            # get pushed past it by the momentum multiplier (e.g. a base_lh at
+            # 4.5 times a 1.25x home-win-streak momentum would reach 5.625).
+            sim_lh = max(MIN_LAMBDA_HOME, min(MAX_LAMBDA_HOME, base_lh * momentum[h]))
+            sim_la = max(MIN_LAMBDA_AWAY, min(MAX_LAMBDA_AWAY, base_la * momentum[a]))
 
             # Draw discrete goals from Poisson distribution
             gh = int(np.random.poisson(sim_lh))
             ga = int(np.random.poisson(sim_la))
 
-            # Update table stats
-            table[h]['gf'] += gh
-            table[h]['ga'] += ga
-            table[a]['gf'] += ga
-            table[a]['ga'] += gh
-
-            if gh > ga:
-                # Home Win
-                table[h]['points'] += 3
-                table[h]['won'] += 1
-                table[a]['lost'] += 1
-
-                # Momentum: Home win bonus, away loss penalty
-                momentum[h] = min(1.25, momentum[h] + 0.05)
-                momentum[a] = max(0.80, momentum[a] - 0.04)
-
-            elif gh < ga:
-                # Away Win — Crucial 1.3x momentum booster
-                table[a]['points'] += 3
-                table[a]['won'] += 1
-                table[h]['lost'] += 1
-
-                # Momentum: 1.3x booster for away victory!
-                momentum[a] = min(1.35, momentum[a] * 1.30)
-                momentum[h] = max(0.78, momentum[h] - 0.06)
-
-            else:
-                # Draw
-                table[h]['points'] += 1
-                table[a]['points'] += 1
-                table[h]['drawn'] += 1
-                table[a]['drawn'] += 1
-
-                # Momentum decays toward 1.0
-                momentum[h] = 1.0 + (momentum[h] - 1.0) * 0.5
-                momentum[a] = 1.0 + (momentum[a] - 1.0) * 0.5
+            _apply_result(table, momentum, h, a, gh, ga)
 
         # Calculate final goal difference
         for t in team_names:

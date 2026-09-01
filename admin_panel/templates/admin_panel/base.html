@@ -43,6 +43,10 @@
                     <i class="fas fa-lock"></i>
                     <span>Access Control</span>
                 </a>
+                <a href="{% url 'admin_panel:season_summary' %}" class="nav-link {% block nav_season_summary %}{% endblock %}">
+                    <i class="fas fa-chart-simple"></i>
+                    <span>Season Summary</span>
+                </a>
                 <a href="{% url 'admin_panel:reports' %}" class="nav-link {% block nav_reports %}{% endblock %}">
                     <i class="fas fa-file-lines"></i>
                     <span>Reports</span>

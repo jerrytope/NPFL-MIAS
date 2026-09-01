@@ -8,7 +8,7 @@ from django.db.models import Count, Prefetch, Sum
 from dashboard.team_logos import get_logo_url_map
 from dashboard.utils import get_npfl_data
 from supercomputer.models import (
-    SeasonFixture, Prediction, TeamSeasonProjection, MatchDayVisibility,
+    SeasonFixture, Prediction, TeamSeasonProjection, MatchDayVisibility, SeasonSummaryOverride,
 )
 from supercomputer.poisson_model import goal_markets, top_scorelines
 from supercomputer.predictor import predict_all_fixtures
@@ -58,7 +58,20 @@ def _season_totals(season):
     match's win/draw/loss probability over all 380 fixtures, so it reveals no
     individual matchup — only the aggregate shape of the season, which is the
     figure the page is meant to headline. The cards are what locks restrict.
+
+    An active SeasonSummaryOverride freezes this instead of computing it live,
+    so the banner doesn't drift every time predictions are regenerated — see
+    the admin panel's Season Summary page.
     """
+    override = SeasonSummaryOverride.objects.filter(season=season, is_active=True).first()
+    if override:
+        return {
+            'games': override.games,
+            'home': override.home_wins,
+            'draw': override.draws,
+            'away': override.away_wins,
+        }
+
     totals = Prediction.objects.filter(fixture__season=season).aggregate(
         games=Count('id'),
         home=Sum('home_win_pct'),
@@ -149,6 +162,12 @@ def predictions_api(request):
             'away': p.fixture.away.name,
             'home_logo': logos.get(p.fixture.home.name.strip().lower()),
             'away_logo': logos.get(p.fixture.away.name.strip().lower()),
+            # Actual result, once the admin has entered it. The card shows the
+            # real scoreline in place of the "VS" badge when these are present,
+            # so a played fixture reads as a result rather than a preview.
+            'is_played': p.fixture.is_played,
+            'home_goal': p.fixture.home_goal,
+            'away_goal': p.fixture.away_goal,
             'home_win_pct': p.home_win_pct,
             'draw_pct': p.draw_pct,
             'away_win_pct': p.away_win_pct,

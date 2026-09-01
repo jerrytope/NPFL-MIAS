@@ -1,6 +1,6 @@
 from django.contrib import admin
 from supercomputer.models import (
-    SeasonFixture, Prediction, MatchAnalysisReport, MatchDayVisibility,
+    SeasonFixture, Prediction, MatchAnalysisReport, MatchDayVisibility, SeasonSummaryOverride,
 )
 
 
@@ -20,6 +20,12 @@ class PredictionAdmin(admin.ModelAdmin):
 class MatchDayVisibilityAdmin(admin.ModelAdmin):
     list_display = ('match_day', 'season', 'is_unlocked', 'updated_at')
     list_filter = ('season', 'is_unlocked')
+
+
+@admin.register(SeasonSummaryOverride)
+class SeasonSummaryOverrideAdmin(admin.ModelAdmin):
+    list_display = ('season', 'is_active', 'games', 'home_wins', 'draws', 'away_wins', 'updated_at')
+    list_filter = ('season', 'is_active')
 
 
 @admin.register(MatchAnalysisReport)

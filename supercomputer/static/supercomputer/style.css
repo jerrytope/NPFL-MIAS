@@ -505,6 +505,42 @@ body {
     flex-shrink: 0;
 }
 
+/* Replaces .vs-badge once the admin has entered the result. Sits in the same
+   slot, so a played and an upcoming fixture keep an identical card layout. */
+.score-badge {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    font-family: var(--font-display);
+    line-height: 1;
+    padding: 6px 14px;
+    border: 1px solid var(--glass-border);
+    border-radius: 12px;
+    flex-shrink: 0;
+}
+
+.score-badge .score-line {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.score-badge .score-dash {
+    color: var(--text-muted);
+    font-weight: 600;
+    margin: 0 5px;
+}
+
+.score-badge .score-ft {
+    font-size: 0.55rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--text-muted);
+}
+
 /* Probability bars */
 .prob-bars {
     display: flex;

@@ -1,16 +1,21 @@
+from unittest.mock import patch
+
+import numpy as np
 import pandas as pd
 from django.test import TestCase
 
 from dashboard.models import Team
 from supercomputer import ratings as ratings_module
+from supercomputer import simulator as simulator_module
 from supercomputer.models import (
-    Prediction, SeasonFixture, TeamCareerStats, MatchDayVisibility,
+    Prediction, SeasonFixture, TeamCareerStats, MatchDayVisibility, SeasonSummaryOverride,
 )
 from supercomputer.poisson_model import (
     expected_goals, goal_markets, most_likely_scoreline, score_probabilities, top_scorelines,
 )
 from supercomputer.predictor import predict_match
 from supercomputer.ratings import compute_team_ratings, get_team_rating, LEAGUE_AVERAGE_RATIO
+from supercomputer.simulator import run_monte_carlo_simulations
 from supercomputer.standings import calculate_standings
 from django.urls import reverse
 from django.contrib.auth.models import User
@@ -155,6 +160,187 @@ class ComputeTeamRatingsTests(TestCase):
         # i.e. shrunk toward the strong career prior, not collapsed to a single bad game.
         self.assertGreater(rating.home_attack, LEAGUE_AVERAGE_RATIO)
 
+    def test_a_one_game_career_record_does_not_become_an_extreme_prior(self):
+        """
+        A club whose entire all-time record is a single high-scoring away game
+        must not be handed that game as a face-value prior.
+
+        This is a real regression: Inter Lagos had exactly one career game (an
+        away win in which it scored 5), which produced an away_attack of 8.2x
+        league average. Its own recent data carries almost no credibility
+        weight, so nothing pulled that back, and the simulator turned it into
+        a 65%-likely champion off one match.
+        """
+        team = Team.objects.create(name='One Game FC')
+        TeamCareerStats.objects.create(
+            team=team, parts=1, played=1,
+            home_win=0, home_draw=0, home_loss=0,
+            home_gf=0, home_ga=0,
+            away_win=1, away_draw=0, away_loss=0,
+            away_gf=5, away_ga=1,   # 5 goals in the single away game it ever played
+            total_win=1, total_draw=0, total_loss=0,
+            total_gf=5, total_ga=1, total_gd=4, points=3,
+        )
+        df = pd.concat([self.df, pd.DataFrame([
+            {'season': '25/26', 'home': 'Weak FC', 'away': 'One Game FC', 'home_goal': 1, 'away_goal': 2},
+        ])], ignore_index=True)
+
+        ratings, _, league_avg_away_goals = compute_team_ratings(df)
+        rating = ratings['One Game FC']
+
+        # Unshrunk, the prior alone would be 5.0 / league_avg_away_goals — far
+        # above 2x league average. The shrunk prior must land nowhere near it.
+        unshrunk_prior = 5.0 / league_avg_away_goals
+        self.assertGreater(unshrunk_prior, 2.0, 'fixture no longer reproduces the extreme prior')
+        self.assertLess(rating.away_attack, 2.0)
+
+    def test_a_long_career_record_is_still_trusted_at_face_value(self):
+        """The prior shrinkage must only affect thin records, not established clubs."""
+        team = Team.objects.create(name='Veteran FC')
+        TeamCareerStats.objects.create(
+            team=team, parts=20, played=600,
+            home_win=250, home_draw=50, home_loss=0,
+            home_gf=750, home_ga=150,
+            away_win=100, away_draw=100, away_loss=100,
+            away_gf=300, away_ga=300,   # 1.0 goals/game over 300 away games
+            total_win=350, total_draw=150, total_loss=100,
+            total_gf=1050, total_ga=450, total_gd=600, points=1200,
+        )
+        df = pd.concat([self.df, pd.DataFrame([
+            {'season': '25/26', 'home': 'Weak FC', 'away': 'Veteran FC', 'home_goal': 0, 'away_goal': 0},
+        ])], ignore_index=True)
+
+        ratings, _, league_avg_away_goals = compute_team_ratings(df)
+
+        # 300 away games is far past the credibility threshold, so the prior
+        # should come through essentially undiluted. Recent form is blended in
+        # afterwards, so allow for that pull rather than asserting an exact match.
+        expected_full_credibility_prior = 1.0 / league_avg_away_goals
+        self.assertGreater(ratings['Veteran FC'].away_attack, expected_full_credibility_prior * 0.5)
+
+
+class RecentFormTests(TestCase):
+    def test_recent_form_crosses_season_boundary(self):
+        # Oldest row is a heavy 0-6 concession that must NOT survive into the
+        # last-5 window; the newest row belongs to a different season entirely
+        # and must still be picked up.
+        df = pd.DataFrame([
+            {'season': '24/25', 'home': 'X FC', 'away': 'A FC', 'home_goal': 0, 'away_goal': 6},
+            {'season': '24/25', 'home': 'B FC', 'away': 'X FC', 'home_goal': 0, 'away_goal': 2},
+            {'season': '24/25', 'home': 'X FC', 'away': 'C FC', 'home_goal': 2, 'away_goal': 0},
+            {'season': '24/25', 'home': 'D FC', 'away': 'X FC', 'home_goal': 0, 'away_goal': 2},
+            {'season': '24/25', 'home': 'X FC', 'away': 'E FC', 'home_goal': 2, 'away_goal': 0},
+            {'season': '25/26', 'home': 'F FC', 'away': 'X FC', 'home_goal': 0, 'away_goal': 2},
+        ])
+
+        attack_form, defense_form, sample_size = ratings_module._recent_form(
+            df, 'X FC', league_avg_home_goals=1.0, league_avg_away_goals=1.0,
+        )
+
+        self.assertEqual(sample_size, 5)
+        self.assertAlmostEqual(attack_form, 2.0)
+        # If the old 0-6 loss had leaked into the window, defense_form would be > 0.
+        self.assertAlmostEqual(defense_form, 0.0)
+
+    def test_single_blowout_game_is_capped_not_left_to_dominate_the_average(self):
+        # One 8-0 away blowout (raw ratio 8/1.0 = 8.0) alongside four modest
+        # 1-1 draws should not be allowed to drag the 5-game average way up —
+        # each game's ratio is capped at RECENT_FORM_MAX_GAME_RATIO first.
+        df = pd.DataFrame([
+            {'season': '24/25', 'home': 'A FC', 'away': 'X FC', 'home_goal': 1, 'away_goal': 1},
+            {'season': '24/25', 'home': 'X FC', 'away': 'B FC', 'home_goal': 1, 'away_goal': 1},
+            {'season': '24/25', 'home': 'C FC', 'away': 'X FC', 'home_goal': 1, 'away_goal': 1},
+            {'season': '24/25', 'home': 'X FC', 'away': 'D FC', 'home_goal': 1, 'away_goal': 1},
+            {'season': '25/26', 'home': 'E FC', 'away': 'X FC', 'home_goal': 0, 'away_goal': 8},
+        ])
+
+        attack_form, defense_form, sample_size = ratings_module._recent_form(
+            df, 'X FC', league_avg_home_goals=1.0, league_avg_away_goals=1.0,
+        )
+
+        self.assertEqual(sample_size, 5)
+        # Uncapped this would be (1+1+1+1+8)/5 = 2.4; capped it must be well below that.
+        uncapped_average = (1 + 1 + 1 + 1 + 8) / 5
+        self.assertLess(attack_form, uncapped_average)
+        self.assertLessEqual(attack_form, ratings_module.RECENT_FORM_MAX_GAME_RATIO)
+
+    def test_blend_replaces_long_run_and_scales_with_sample_size(self):
+        long_run = ratings_module.TeamRating(
+            home_attack=1.0, home_defense=1.0, away_attack=1.0, away_defense=1.0,
+        )
+
+        no_data = ratings_module._blend_recent_form(long_run, None, None, 0)
+        self.assertEqual(no_data, long_run)
+
+        full_w = ratings_module.RECENT_FORM_WEIGHT  # w = RECENT_FORM_WEIGHT * min(1, 5/5)
+        full_window = ratings_module._blend_recent_form(long_run, 2.0, 0.0, sample_size=5)
+        self.assertAlmostEqual(full_window.home_attack, 1.0 * (1 - full_w) + 2.0 * full_w)
+        self.assertAlmostEqual(full_window.home_defense, 1.0 * (1 - full_w) + 0.0 * full_w)
+
+        thin_w = full_w * (1 / ratings_module.RECENT_FORM_GAMES)  # sample_size=1 out of a 5-game window
+        thin_window = ratings_module._blend_recent_form(long_run, 2.0, 0.0, sample_size=1)
+        self.assertAlmostEqual(thin_window.home_attack, 1.0 * (1 - thin_w) + 2.0 * thin_w)
+        # A single game should pull the rating far less than a full 5-game window.
+        self.assertLess(thin_window.home_attack, full_window.home_attack)
+
+    def test_form_influence_fades_as_the_fixture_gets_further_away(self):
+        # Current form says a lot about next week's match and little about one
+        # eight months out. Applying it flat across all 38 match days is what
+        # compounded a hot streak into impossible season totals.
+        self.assertEqual(ratings_module.form_horizon_factor(0), 1.0)
+
+        factors = [ratings_module.form_horizon_factor(h) for h in range(0, 20)]
+        for nearer, further in zip(factors, factors[1:]):
+            self.assertGreater(nearer, further)
+
+        # Half-life semantics: the weight should be halved after
+        # FORM_HORIZON_HALF_LIFE match days.
+        self.assertAlmostEqual(
+            ratings_module.form_horizon_factor(ratings_module.FORM_HORIZON_HALF_LIFE), 0.5,
+        )
+        self.assertLess(ratings_module.form_horizon_factor(20), 0.01)
+
+    def test_distant_fixtures_fall_back_to_the_long_run_rating(self):
+        long_run = {'Hot FC': ratings_module.TeamRating(
+            home_attack=1.0, home_defense=1.0, away_attack=1.0, away_defense=1.0,
+        )}
+        form = {'Hot FC': (2.5, 0.2, 5)}   # a scorching full 5-game window
+
+        near = ratings_module.blend_ratings(long_run, form, horizon=1)
+        far = ratings_module.blend_ratings(long_run, form, horizon=25)
+
+        # Near fixture leans hard on form; distant fixture is essentially the
+        # long-run rating again.
+        self.assertGreater(near['Hot FC'].home_attack, 1.5)
+        self.assertAlmostEqual(far['Hot FC'].home_attack, 1.0, delta=0.02)
+
+    def test_recent_form_meaningfully_shifts_rating_in_compute_team_ratings(self):
+        # Old, thin history (low weight, low credibility either way) plus a
+        # strong 5-game finish that crosses the season boundary.
+        df = pd.DataFrame([
+            {'season': '22/23', 'home': 'Revival FC', 'away': 'Filler FC', 'home_goal': 1, 'away_goal': 1},
+            {'season': '22/23', 'home': 'Filler FC', 'away': 'Revival FC', 'home_goal': 1, 'away_goal': 1},
+            {'season': '23/24', 'home': 'Revival FC', 'away': 'Filler FC', 'home_goal': 4, 'away_goal': 0},
+            {'season': '23/24', 'home': 'Filler FC', 'away': 'Revival FC', 'home_goal': 0, 'away_goal': 4},
+            {'season': '24/25', 'home': 'Revival FC', 'away': 'Filler FC', 'home_goal': 4, 'away_goal': 0},
+            {'season': '24/25', 'home': 'Filler FC', 'away': 'Revival FC', 'home_goal': 0, 'away_goal': 4},
+            {'season': '25/26', 'home': 'Revival FC', 'away': 'Filler FC', 'home_goal': 4, 'away_goal': 0},
+        ])
+
+        ratings_with_form, _, _ = compute_team_ratings(df)
+
+        original_weight = ratings_module.RECENT_FORM_WEIGHT
+        ratings_module.RECENT_FORM_WEIGHT = 0.0
+        try:
+            ratings_long_run_only, _, _ = compute_team_ratings(df)
+        finally:
+            ratings_module.RECENT_FORM_WEIGHT = original_weight
+
+        self.assertGreater(
+            ratings_with_form['Revival FC'].home_attack,
+            ratings_long_run_only['Revival FC'].home_attack,
+        )
+
 
 class PredictMatchTests(TestCase):
     def test_percentages_sum_to_100_with_no_data_for_either_team(self):
@@ -225,6 +411,11 @@ class MatchDayLockTests(TestCase):
         MatchDayVisibility.objects.create(season='26/27', match_day=2, is_unlocked=False)
         MatchDayVisibility.objects.create(season='26/27', match_day=3, is_unlocked=False)
 
+        # This class tests the LIVE season-totals computation specifically;
+        # the migration-seeded SeasonSummaryOverride for 26/27 would otherwise
+        # short-circuit _season_totals() with frozen numbers instead.
+        SeasonSummaryOverride.objects.filter(season='26/27').update(is_active=False)
+
     def _fixture(self, match_day, home, away):
         fixture = SeasonFixture.objects.create(
             season='26/27', match_day=match_day, home=home, away=away,
@@ -293,6 +484,47 @@ class MatchDayLockTests(TestCase):
             )
 
 
+class SeasonSummaryOverrideTests(TestCase):
+    """The public season-summary card can be frozen at fixed numbers instead
+    of live-computed from Prediction percentages — see
+    supercomputer/views.py::_season_totals and admin_panel's Season Summary page."""
+
+    def setUp(self):
+        # The 26/27 migration seed would otherwise interfere with tests that
+        # want to control override state explicitly.
+        SeasonSummaryOverride.objects.filter(season='26/27').delete()
+
+        alpha = Team.objects.create(name='Alpha FC')
+        beta = Team.objects.create(name='Beta FC')
+        fixture = SeasonFixture.objects.create(season='26/27', match_day=1, home=alpha, away=beta)
+        Prediction.objects.create(
+            fixture=fixture, home_win_pct=60.0, draw_pct=25.0, away_win_pct=15.0,
+            predicted_result='HOME', confidence=60.0,
+        )
+
+    def test_no_override_row_falls_back_to_live_computation(self):
+        from supercomputer.views import _season_totals
+        totals = _season_totals('26/27')
+        self.assertEqual(totals['games'], 1)
+        self.assertEqual(totals['home'], round(60.0 / 100))
+
+    def test_inactive_override_falls_back_to_live_computation(self):
+        from supercomputer.views import _season_totals
+        SeasonSummaryOverride.objects.create(
+            season='26/27', is_active=False, games=380, home_wins=236, draws=97, away_wins=47,
+        )
+        totals = _season_totals('26/27')
+        self.assertEqual(totals['games'], 1)  # live value, not the inactive override's 380
+
+    def test_active_override_freezes_the_numbers(self):
+        from supercomputer.views import _season_totals
+        SeasonSummaryOverride.objects.create(
+            season='26/27', is_active=True, games=380, home_wins=236, draws=97, away_wins=47,
+        )
+        totals = _season_totals('26/27')
+        self.assertEqual(totals, {'games': 380, 'home': 236, 'draw': 97, 'away': 47})
+
+
 class PublicApiPayloadTests(TestCase):
     """
     What the public APIs expose per fixture: crest URLs in, and the internal
@@ -323,6 +555,35 @@ class PublicApiPayloadTests(TestCase):
         for row in self._rows():
             self.assertIsNotNone(row['home_logo'])
             self.assertIn('Doma%20United.png', row['home_logo'])
+
+    def test_an_unplayed_fixture_reports_no_score(self):
+        """The card shows its "VS" badge off these fields."""
+        row = self.client.get('/supercomputer/api/predictions/').json()['results'][0]
+        self.assertFalse(row['is_played'])
+        self.assertIsNone(row['home_goal'])
+        self.assertIsNone(row['away_goal'])
+
+    def test_a_played_fixture_exposes_the_entered_score(self):
+        """Once the admin enters a result the card shows it instead of "VS"."""
+        fixture = SeasonFixture.objects.get(season='26/27', match_day=1)
+        fixture.home_goal, fixture.away_goal = 2, 1
+        fixture.save()
+
+        row = self.client.get('/supercomputer/api/predictions/').json()['results'][0]
+        self.assertTrue(row['is_played'])
+        self.assertEqual(row['home_goal'], 2)
+        self.assertEqual(row['away_goal'], 1)
+
+    def test_a_goalless_draw_still_counts_as_played(self):
+        """0-0 is falsy in JS, so is_played must drive the UI, not the goals."""
+        fixture = SeasonFixture.objects.get(season='26/27', match_day=1)
+        fixture.home_goal, fixture.away_goal = 0, 0
+        fixture.save()
+
+        row = self.client.get('/supercomputer/api/predictions/').json()['results'][0]
+        self.assertTrue(row['is_played'])
+        self.assertEqual(row['home_goal'], 0)
+        self.assertEqual(row['away_goal'], 0)
 
     def test_club_without_a_crest_gets_null_not_a_broken_path(self):
         """Null lets the UI fall back to an initials badge instead of a 404 image."""
@@ -509,3 +770,118 @@ class CareerStatsFreshnessTests(TestCase):
 
         stats = ratings_module.get_all_career_stats()
         self.assertIn('freshness fc', stats)
+
+
+class SimulatorTests(TestCase):
+    def setUp(self):
+        self.team_a = Team.objects.create(name='Team A')
+        self.team_b = Team.objects.create(name='Team B')
+
+    def test_played_fixture_points_are_locked_in_with_zero_variance(self):
+        SeasonFixture.objects.create(
+            season='SIM_LOCK', match_day=1, home=self.team_a, away=self.team_b,
+            home_goal=2, away_goal=0,
+        )
+
+        projections = run_monte_carlo_simulations(season='SIM_LOCK', iterations=20, df=empty_match_df())
+        by_team = {p['team']: p for p in projections}
+
+        self.assertEqual(by_team['Team A']['expected_points'], 3.0)
+        self.assertEqual(by_team['Team A']['best_points'], 3)
+        self.assertEqual(by_team['Team A']['worst_points'], 3)
+        self.assertEqual(by_team['Team B']['expected_points'], 0.0)
+        self.assertEqual(by_team['Team B']['best_points'], 0)
+        self.assertEqual(by_team['Team B']['worst_points'], 0)
+
+    def test_fully_played_season_gives_zero_variance_and_binary_title_pct(self):
+        team_c = Team.objects.create(name='Team C')
+        SeasonFixture.objects.create(season='SIM_FULL', match_day=1, home=self.team_a, away=self.team_b, home_goal=3, away_goal=0)
+        SeasonFixture.objects.create(season='SIM_FULL', match_day=2, home=team_c, away=self.team_a, home_goal=1, away_goal=1)
+        SeasonFixture.objects.create(season='SIM_FULL', match_day=3, home=self.team_b, away=team_c, home_goal=0, away_goal=2)
+
+        projections = run_monte_carlo_simulations(season='SIM_FULL', iterations=30, df=empty_match_df())
+
+        for p in projections:
+            self.assertEqual(p['best_points'], p['worst_points'])
+            self.assertEqual(p['expected_points'], float(p['best_points']))
+            self.assertIn(p['title_pct'], (0.0, 100.0))
+            self.assertIn(p['relegation_pct'], (0.0, 100.0))
+
+    def test_unplayed_fixtures_still_vary(self):
+        SeasonFixture.objects.create(
+            season='SIM_MIX', match_day=1, home=self.team_a, away=self.team_b,
+            home_goal=1, away_goal=1,
+        )
+        SeasonFixture.objects.create(
+            season='SIM_MIX', match_day=2, home=self.team_b, away=self.team_a,
+        )
+
+        projections = run_monte_carlo_simulations(season='SIM_MIX', iterations=300, df=empty_match_df())
+        by_team = {p['team']: p for p in projections}
+
+        # MD1 is fixed (1-1 draw); MD2 is unplayed and must still be random.
+        self.assertNotEqual(by_team['Team A']['best_points'], by_team['Team A']['worst_points'])
+
+    def test_momentum_carries_from_played_result_into_simulated_fixtures(self):
+        rival = Team.objects.create(name='Rival FC')
+
+        np.random.seed(42)
+        SeasonFixture.objects.create(
+            season='SIM_MOMENTUM_WIN', match_day=1, home=self.team_b, away=self.team_a,
+            home_goal=0, away_goal=3,  # Team A: decisive away win
+        )
+        SeasonFixture.objects.create(
+            season='SIM_MOMENTUM_WIN', match_day=2, home=self.team_a, away=rival,
+        )
+        win_projections = {
+            p['team']: p for p in run_monte_carlo_simulations(
+                season='SIM_MOMENTUM_WIN', iterations=1000, df=empty_match_df(),
+            )
+        }
+
+        np.random.seed(42)
+        SeasonFixture.objects.create(
+            season='SIM_MOMENTUM_DRAW', match_day=1, home=self.team_b, away=self.team_a,
+            home_goal=0, away_goal=0,  # Team A: draw instead of a win
+        )
+        SeasonFixture.objects.create(
+            season='SIM_MOMENTUM_DRAW', match_day=2, home=self.team_a, away=rival,
+        )
+        draw_projections = {
+            p['team']: p for p in run_monte_carlo_simulations(
+                season='SIM_MOMENTUM_DRAW', iterations=1000, df=empty_match_df(),
+            )
+        }
+
+        # Same MD2 fixture, same seed — the only difference is the momentum
+        # Team A carries in from MD1's real result (win vs draw).
+        self.assertGreater(
+            win_projections['Team A']['expected_points'],
+            draw_projections['Team A']['expected_points'],
+        )
+
+    def test_momentum_never_pushes_simulated_lambda_past_the_documented_cap(self):
+        rival = Team.objects.create(name='Momentum Cap Rival FC')
+
+        # MD1: Team A's decisive home win banks a +3 goal difference and pushes
+        # its momentum to the 1.25x home-win ceiling.
+        SeasonFixture.objects.create(
+            season='SIM_CLIP', match_day=1, home=self.team_a, away=self.team_b,
+            home_goal=3, away_goal=0,
+        )
+        # MD2: unplayed fixture whose base lambdas we force to already sit at
+        # the documented caps (4.5 home / 3.5 away), so 1.25x momentum would
+        # push the home lambda to 5.625 if it weren't re-clipped.
+        SeasonFixture.objects.create(
+            season='SIM_CLIP', match_day=2, home=self.team_a, away=rival,
+        )
+
+        with patch.object(simulator_module, 'calculate_match_expected_goals', return_value=(4.5, 3.5)):
+            projections = run_monte_carlo_simulations(season='SIM_CLIP', iterations=3000, df=empty_match_df())
+
+        by_team = {p['team']: p for p in projections}
+        # Expected total goal difference = +3 banked from MD1, plus the
+        # simulated MD2 mean (sim_lh - sim_la). Correctly re-clipped, that's
+        # 4.5 - 3.5 = 1.0, for a total of ~4.0. If momentum weren't re-clipped
+        # (bug), sim_lh would average 5.625, giving a total of ~5.125 instead.
+        self.assertAlmostEqual(by_team['Team A']['avg_goal_diff'], 4.0, delta=0.3)

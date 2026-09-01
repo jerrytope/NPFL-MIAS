@@ -436,6 +436,16 @@ function createPredictionCard(p) {
 
     const dlLabel = `${p.home}-vs-${p.away}-md${p.match_day}`;
 
+    // Once the admin has entered a result, the centre badge shows the real
+    // scoreline instead of "VS" — the fixture has happened, so it should read
+    // as a result rather than a preview.
+    const centreBadge = p.is_played
+        ? `<div class="score-badge" title="Full time result">
+               <span class="score-line">${p.home_goal}<span class="score-dash">-</span>${p.away_goal}</span>
+               <span class="score-ft">FT</span>
+           </div>`
+        : '<div class="vs-badge">VS</div>';
+
     card.innerHTML = `
         ${downloadButton('prediction', p.id, dlLabel)}
         <div class="card-match-day">Match Day ${p.match_day}</div>
@@ -445,7 +455,7 @@ function createPredictionCard(p) {
                 <div class="team-name home">${p.home}</div>
                 <div class="venue-tag">Home</div>
             </div>
-            <div class="vs-badge">VS</div>
+            ${centreBadge}
             <div class="card-team-side away">
                 ${teamBadge(p.away, p.away_logo)}
                 <div class="team-name away">${p.away}</div>

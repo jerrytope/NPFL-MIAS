@@ -29,7 +29,10 @@ from pathlib import Path
 import pandas as pd
 from django.conf import settings
 
-from supercomputer.ratings import compute_team_ratings, get_team_rating
+from supercomputer.ratings import (
+    blend_ratings, compute_rating_components, compute_team_ratings, get_team_rating,
+    last_played_match_day,
+)
 from supercomputer.poisson_model import expected_goals, score_probabilities
 
 
@@ -182,8 +185,10 @@ def predict_all_fixtures(fixtures, df):
     """
     Run predictions for a list of SeasonFixture objects.
 
-    Fits team ratings once from `df` and reuses them across every fixture,
-    rather than recomputing per-team data redundantly for every matchup.
+    Fits the expensive long-run rating model once from `df`, then re-blends
+    recent form per fixture at the weight appropriate for how far ahead that
+    fixture is (see ratings.form_horizon_factor) — a match day away leans
+    heavily on current form, one late in the season barely at all.
 
     Args:
         fixtures: QuerySet or list of SeasonFixture instances.
@@ -192,13 +197,27 @@ def predict_all_fixtures(fixtures, df):
     Returns:
         list of dicts, each containing fixture + prediction data.
     """
-    ratings, league_avg_home_goals, league_avg_away_goals = compute_team_ratings(df)
+    long_run_ratings, form_signals, league_avg_home_goals, league_avg_away_goals = (
+        compute_rating_components(df)
+    )
+
+    fixtures = list(fixtures)
+    reference_match_day = last_played_match_day(
+        fixtures[0].season if fixtures else None
+    )
 
     results = []
+    ratings_by_horizon = {}
     for fixture in fixtures:
+        horizon = max(0, fixture.match_day - reference_match_day)
+        if horizon not in ratings_by_horizon:
+            ratings_by_horizon[horizon] = blend_ratings(
+                long_run_ratings, form_signals, horizon,
+            )
+
         prediction = predict_match(
             fixture.home.name, fixture.away.name,
-            ratings, league_avg_home_goals, league_avg_away_goals,
+            ratings_by_horizon[horizon], league_avg_home_goals, league_avg_away_goals,
         )
         prediction['fixture'] = fixture
         results.append(prediction)
