@@ -82,7 +82,7 @@ def compare_teams(request):
 @require_GET
 def generate_report(request):
     """
-    JSON API endpoint to generate a BBC-style expert report for the selected teams.
+    JSON API endpoint to generate a MIAS analytical preview for the selected teams.
     """
     team1 = request.GET.get('team1')
     team2 = request.GET.get('team2')
@@ -115,9 +115,9 @@ def generate_report(request):
         # full server traceback in a `debug` key, which handed any visitor the
         # project's file layout and internals — the trace belongs in the server
         # log, and only the short message goes back to the caller.
-        logger.exception('Report generation failed for %s vs %s', team1, team2)
+        logger.exception('Preview generation failed for %s vs %s', team1, team2)
         return JsonResponse(
-            {'error': f'Failed to generate report: {e}'},
+            {'error': f'Failed to generate preview: {e}'},
             status=500,
         )
 

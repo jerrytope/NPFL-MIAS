@@ -318,7 +318,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnGenerateReport.disabled = !valid;
         if (!valid) {
             reportCard.style.display = 'none';
-            reportStatus.innerText = 'Select two different teams to enable report generation.';
+            reportStatus.innerText = 'Select two different teams to enable preview generation.';
         }
     }
 
@@ -326,12 +326,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!report) {
             reportCard.style.display = 'none';
             reportSource.style.display = 'none';
-            reportStatus.innerText = 'No saved report yet. Click Generate BBC Report to create one.';
+            reportStatus.innerText = 'No saved preview yet. Click Generate MIAS AI Preview to create one.';
             return;
         }
 
         reportCard.style.display = 'block';
-        reportStatus.innerText = `Saved report for ${team1} vs ${team2}`;
+        reportStatus.innerText = `Saved preview for ${team1} vs ${team2}`;
         reportContent.innerHTML = `<div class="report-text">${formatReportMarkdown(report)}</div>`;
 
         // Show source label
@@ -346,13 +346,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const team2 = selectTeam2.value;
 
         if (!team1 || !team2 || team1 === team2) {
-            showError('Please select two different teams to generate a report.');
+            showError('Please select two different teams to generate a preview.');
             return;
         }
 
         reportCard.style.display = 'block';
-        reportStatus.innerText = 'Generating BBC expert report...';
-        reportContent.innerHTML = '<p class="report-placeholder">Working on your analysis. This may take a few seconds.</p>';
+        reportStatus.innerText = 'Generating MIAS analytical preview...';
+        reportContent.innerHTML = '<p class="report-placeholder">Working on your analytical preview. This may take a few seconds.</p>';
         btnGenerateReport.disabled = true;
 
         fetch(`/generate-report/?team1=${encodeURIComponent(team1)}&team2=${encodeURIComponent(team2)}`)
@@ -371,15 +371,15 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(data => {
                 reportStatus.innerText = data.cached
-                    ? `Saved report for ${team1} vs ${team2}`
-                    : `New report saved for ${team1} vs ${team2}`;
+                    ? `Saved preview for ${team1} vs ${team2}`
+                    : `New preview saved for ${team1} vs ${team2}`;
                 reportContent.innerHTML = `<div class="report-text">${formatReportMarkdown(data.report)}</div>`;
                 // Show source label (newly generated is always AI)
                 reportSource.style.display = 'block';
-                reportSourceLabel.innerHTML = '<i class="fas fa-robot"></i> AI Generated';
+                reportSourceLabel.innerHTML = '<i class="fas fa-robot"></i> MIAS-AI Preview';
             })
             .catch(err => {
-                reportStatus.innerText = 'Report generation failed.';
+                reportStatus.innerText = 'Preview generation failed.';
                 reportContent.innerHTML = `<p class="report-placeholder">${err.message}</p>`;
             })
             .finally(() => {
