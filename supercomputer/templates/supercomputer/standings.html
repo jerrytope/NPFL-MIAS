@@ -392,7 +392,11 @@
             --stnds-thead-bg: rgba(255, 255, 255, 0.03);
             --stnds-text-primary: #f1f5f9;
             --stnds-text-secondary: #94a3b8;
-            --stnds-muted: #475569;
+            /* Was #475569, which is only 2.34:1 against the dark card — below
+               the 4.5:1 body-text minimum, so the info paragraphs and the
+               "< 0.1%" pills were effectively invisible. #7c8ba1 reads at
+               5.12:1 while staying dimmer than --stnds-text-secondary. */
+            --stnds-muted: #7c8ba1;
             --stnds-badge-bg: rgba(255, 255, 255, 0.06);
             --stnds-select-bg: rgba(255, 255, 255, 0.05);
             --stnds-toast-bg: #1e293b;
@@ -574,9 +578,9 @@
                 </div>
                 {% else %}
                 <div class="empty-state" style="margin-top:40px; text-align:center; padding:40px;">
-                    <i class="fas fa-trophy" style="font-size:32px; color:#9ca3af; margin-bottom:12px;"></i>
+                    <i class="fas fa-trophy" style="font-size:32px; color:var(--stnds-text-secondary, #9ca3af); margin-bottom:12px;"></i>
                     <h3>No prediction data available</h3>
-                    <p style="color:#6b7280; margin-top:8px;">Run `python manage.py generate_predictions` to generate the deterministic standings.</p>
+                    <p style="color:var(--stnds-text-secondary, #6b7280); margin-top:8px;">Run `python manage.py generate_predictions` to generate the deterministic standings.</p>
                 </div>
                 {% endif %}
             </div>
@@ -664,7 +668,7 @@
                                     <span class="prob-pill zero">&lt; 0.1%</span>
                                     {% endif %}
                                 </td>
-                                <td style="color:#4b5563; font-weight:600;">
+                                <td style="color:var(--stnds-text-secondary, #4b5563); font-weight:600;">
                                     {% if row.avg_goal_diff > 0 %}+{{ row.avg_goal_diff|floatformat:1 }}{% else %}{{ row.avg_goal_diff|floatformat:1 }}{% endif %}
                                 </td>
                             </tr>
@@ -674,9 +678,9 @@
                 </div>
                 {% else %}
                 <div class="empty-state" style="margin-top:40px; text-align:center; padding:40px;">
-                    <i class="fas fa-dice" style="font-size:32px; color:#9ca3af; margin-bottom:12px;"></i>
+                    <i class="fas fa-dice" style="font-size:32px; color:var(--stnds-text-secondary, #9ca3af); margin-bottom:12px;"></i>
                     <h3>No simulation data available yet</h3>
-                    <p style="color:#6b7280; margin-top:8px;">Run <code>python manage.py run_simulation</code> in the terminal to generate the full probabilistic table.</p>
+                    <p style="color:var(--stnds-text-secondary, #6b7280); margin-top:8px;">Run <code>python manage.py run_simulation</code> in the terminal to generate the full probabilistic table.</p>
                 </div>
                 {% endif %}
             </div>
@@ -754,9 +758,9 @@
                 </div>
                 {% else %}
                 <div class="empty-state" style="margin-top:40px; text-align:center; padding:40px;">
-                    <i class="fas fa-futbol" style="font-size:32px; color:#9ca3af; margin-bottom:12px;"></i>
+                    <i class="fas fa-futbol" style="font-size:32px; color:var(--stnds-text-secondary, #9ca3af); margin-bottom:12px;"></i>
                     <h3>No results entered yet</h3>
-                    <p style="color:#6b7280; margin-top:8px;">The table will fill in as match results are recorded in the admin panel.</p>
+                    <p style="color:var(--stnds-text-secondary, #6b7280); margin-top:8px;">The table will fill in as match results are recorded in the admin panel.</p>
                 </div>
                 {% endif %}
             </div>

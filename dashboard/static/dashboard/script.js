@@ -306,7 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return `<ol>${lines.map(line => `<li>${formatInline(line.replace(/^\d+[.)]\s+/, ''))}</li>`).join('')}</ol>`;
             }
 
-            return `<p>${lines.map(formatInline).join('<br>')}</p>`;
+            return `<p>${lines.map(formatInline).join('<br><br>')}</p>`;
         }).join('');
     }
 
@@ -361,7 +361,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     return res.text().then(text => {
                         try {
                             const err = JSON.parse(text);
-                            throw new Error(err.error || err.debug || 'Server error generating report');
+                            throw new Error(err.error || 'Server error generating report');
                         } catch (parseErr) {
                             throw new Error(text || 'Server error generating report');
                         }

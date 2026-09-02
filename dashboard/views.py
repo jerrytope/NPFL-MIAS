@@ -1,10 +1,13 @@
-import traceback
+import logging
+
 from django.shortcuts import render
 from django.http import JsonResponse
 from django.views.decorators.http import require_GET
 from dashboard import utils
 from dashboard.models import TeamComparisonReport
 from dashboard.team_logos import get_logo_url_map
+
+logger = logging.getLogger(__name__)
 
 
 # The clubs eligible for selection in the current 2026/27 NPFL season.
@@ -108,12 +111,13 @@ def generate_report(request):
         )
         return JsonResponse({'report': report_text, 'cached': False})
     except Exception as e:
-        error_trace = traceback.format_exc()
+        # This endpoint is public and unauthenticated. It used to return the
+        # full server traceback in a `debug` key, which handed any visitor the
+        # project's file layout and internals — the trace belongs in the server
+        # log, and only the short message goes back to the caller.
+        logger.exception('Report generation failed for %s vs %s', team1, team2)
         return JsonResponse(
-            {
-                'error': f'Failed to generate report: {str(e)}',
-                'debug': error_trace,
-            },
+            {'error': f'Failed to generate report: {e}'},
             status=500,
         )
 

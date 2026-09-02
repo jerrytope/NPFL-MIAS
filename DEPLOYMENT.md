@@ -136,11 +136,11 @@ SECRET_KEY=change-this-to-a-long-random-string-in-production
 DEBUG=False
 ALLOWED_HOSTS=YOUR_EC2_PUBLIC_IP,yourdomain.com,localhost
 
-# AI API (if used)
+# Anthropic API — required for AI report generation
 ANTHROPIC_API_KEY=your-api-key-here
-ANTHROPIC_BASE_URL=https://agentrouter.org
-ANTHROPIC_FALLBACK_BASE_URL=https://ps.air-outer.com
-ANTHROPIC_MODEL=gpt-5.6-sol
+# Optional overrides; sensible defaults are set in dashboard/utils.py
+# ANTHROPIC_MODEL=claude-sonnet-5
+# ANTHROPIC_MAX_TOKENS=8000
 EOF
 ```
 
